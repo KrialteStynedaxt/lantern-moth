@@ -2,7 +2,7 @@
 
 A night-sky arcade game. Fly into lanterns to keep your glow alive, dodge spiders, bats and slimes, and survive the Weaver.
 
-**Play:** https://krialtestynedaxt.github.io/lantern-moth/ *(this link starts working once GitHub Pages is switched on)*
+**Play:** https://krialtestynedaxt.github.io/lantern-moth/
 
 ## Controls
 - **Keyboard:** arrow keys or A / D to steer. P or Esc pauses. F toggles fullscreen.
