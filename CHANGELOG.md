@@ -2,6 +2,18 @@
 
 Each update raises the version by 0.01. The live game is always `index.html`; every version is its own commit titled "Lantern Moth v2.xx" and automatically gets a tagged Release with a downloadable `LanternMoth-v2.xx.html`.
 
+## v2.43 — 2026-10-19
+- **Lumi:** her wand sparkle pulses half as often, and her wings beat a little slower, in the shop, the tutorial and her secret flyby.
+- **Itsy-Bitsy:**
+  - Now triggers at a streak of 10 (was 15).
+  - Spiders come at 2× the normal spider rate (was 1.25×).
+  - Itsy spiders still fall at 1.25× normal speed.
+- **The Weaver:** webs hold for 3 s (was 3.2), and he waits 1.5 s (was 1 s) before spitting venom at a caught moth.
+- **Shop prices:**
+  - Rebirth Spark: 20 coins (was 40).
+  - Lumi's Lure: 10 coins (was 50).
+  - Moonlit Wings and Polygrammate Wings: 50 coins each (was 100).
+
 ## v2.42 — 2026-10-19
 - **Itsy-Bitsy** now sends spiders at 1.25× the normal spider rate (it was about 2.75×).
 - **The Weaver:**
