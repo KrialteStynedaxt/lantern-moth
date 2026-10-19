@@ -2,6 +2,15 @@
 
 Each update raises the version by 0.01. The live game is always `index.html`; every version is its own commit titled "Lantern Moth v2.xx" and automatically gets a tagged Release with a downloadable `LanternMoth-v2.xx.html`.
 
+## v2.44 — 2026-10-19
+- **Leaderboard:** each player now holds a single spot on All-time and This week, with their best run. Lower runs are still saved but don't take extra places. After posting, the game tells you if your earlier best still stands.
+- **Names:** up to 4 characters (was 3), so the default MOTH fits like any other name.
+- **Options:** new **Reset all data** button at the bottom. It asks twice before erasing coins, items, skins, best score, saved runs, name and settings on this device. Online scores stay.
+- **The Weaver:**
+  - Now starts at a streak of 20 (was 25). Slime Rain still needs 25.
+  - When both are available, a coin flip at streak 20 decides which one this streak gets.
+  - Webs hold for 2.5 s (was 3).
+
 ## v2.43 — 2026-10-19
 - **Lumi:** her wand sparkle pulses half as often, and her wings beat a little slower, in the shop, the tutorial and her secret flyby.
 - **Itsy-Bitsy:**

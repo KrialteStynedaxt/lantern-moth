@@ -20,6 +20,7 @@ A night-sky arcade game. Fly into lanterns to keep your glow alive, dodge spider
 
 ## Online leaderboard
 - Scores are stored by the score server in `worker/` (a Cloudflare Worker with a D1 database called `lantern-moth-scores`). GitHub Actions redeploys it automatically whenever `worker/` changes.
+- Each player (one device) shows once per board, with their best run. Lower runs stay in the database but don't show.
 - The server refuses offensive names, impossible scores and rapid-fire submissions. Players are anonymous: only the name, score, level, run length, game version and a random device id are stored.
 - **Removing a score:** in the Cloudflare dashboard, open **Storage & databases → D1 → lantern-moth-scores → Console** and run:
   - `SELECT id, name, score, level, created FROM scores ORDER BY score DESC LIMIT 50;` to find it

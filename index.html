@@ -1,6 +1,7 @@
 <!doctype html>
 <!--
-  Lantern Moth v2.43
+  Lantern Moth v2.44
+  v2.44: one leaderboard entry per player; 4-character names; Reset all data in Options; Weaver at streak 20, webs hold 2.5s.
   v2.43: calmer Lumi (wand sparkle and wings); Itsy-Bitsy at streak 10 with 2x spiders; Weaver webs 3s, venom after 1.5s; cheaper shop.
   v2.42: calmer Itsy-Bitsy spawns; Weaver shots outlive him; web traps (longer, harder to escape) bring venom-only fire; gentler Lumi in the shop.
   v2.41: online leaderboard (All-time / This week / My runs) backed by the Cloudflare score server in worker/.
@@ -215,7 +216,7 @@ button.alt:hover { background: rgba(255,200,97,0.12); filter: none; }
 .slider output { color: var(--ink); font-variant-numeric: tabular-nums; }
 input[type="range"] { width: 100%; accent-color: var(--glow); margin: 0; }
 input[type="range"]:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
-input[type="text"] { font: inherit; font-weight: 500; font-size: 16px; letter-spacing: 0.3em; text-transform: uppercase; width: 6.5ch; background: rgba(11,16,32,0.8); color: var(--ink); border: 1px solid var(--glow); border-radius: 4px; padding: 9px 12px; }
+input[type="text"] { font: inherit; font-weight: 500; font-size: 16px; letter-spacing: 0.3em; text-transform: uppercase; width: 8ch; background: rgba(11,16,32,0.8); color: var(--ink); border: 1px solid var(--glow); border-radius: 4px; padding: 9px 12px; }
 input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 
 .fairy { position: absolute; z-index: 4; left: 3%; right: 3%; top: 36%; display: flex; gap: 10px; align-items: flex-start; padding: clamp(8px, 2.6cqw, 12px); background: rgba(11,16,32,0.88); border: 1px solid var(--line); border-radius: 6px; }
@@ -236,7 +237,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
 .lb .empty { display: block; color: var(--muted); border: 0; }
 .lb li.gap { display: block; text-align: center; color: var(--muted); border: 0; padding: 0; letter-spacing: 0.3em; }
 .lb { max-width: 340px; }
-.lb li { grid-template-columns: 4.2ch 4.5ch 1fr auto 4.6em; }
+.lb li { grid-template-columns: 4.2ch 5.4ch 1fr auto 4.6em; }
 .lb li span:nth-child(3) { text-align: right; }
 .tabs { display: flex; gap: 6px; width: 100%; max-width: 340px; }
 .tabs .tab { flex: 1; padding: 8px 6px; font-size: clamp(11px, 3.1cqw, 12px); background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; }
@@ -268,6 +269,11 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
 .ware.on { border-color: var(--glow); }
 .ware button.poor { opacity: 0.6; }
 
+.resetzone { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 300px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.resetzone .danger { align-self: flex-start; background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+.resetzone .danger:hover { background: rgba(255,97,121,0.12); filter: none; }
+.resetzone .danger.arm2 { background: var(--danger); color: #1a0508; }
+.resetzone p:empty { display: none; }
 #errbar { position: fixed; left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom, 0px)); z-index: 100; padding: 10px 12px; border-radius: 6px; background: #3a0f1a; border: 1px solid var(--danger); color: #ffd2d8; font-size: 13px; line-height: 1.4; -webkit-user-select: text; user-select: text; }
 .nojs { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; padding: 32px; text-align: center; background: var(--night); color: var(--ink); line-height: 1.5; }
 .nojs b { font-family: var(--font-display); font-size: 26px; color: var(--glow); }
@@ -331,7 +337,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       <div class="meter" id="meter" role="meter" aria-label="Glow" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="meterfill"></i></div>
     </div>
     <div class="card" id="card">
-      <p class="eyebrow">Lantern Moth <span class="ver">- v2.43</span></p>
+      <p class="eyebrow">Lantern Moth <span class="ver">- v2.44</span></p>
       <h2 id="ctitle">Keep the glow alive</h2>
       <p id="cbody">Fly into lanterns to refill your light and dodge the spiders. Catch enough lanterns to level up. Every tenth level earns a rebirth, a second chance when your glow goes out.</p>
       <p class="keys" id="ckeys">Arrow keys or A / D to steer. On a touch screen, drag. P or Esc pauses. New here? Try the tutorial.</p>
@@ -340,7 +346,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
         <button id="tut" class="alt" type="button">Tutorial</button>
       </div>
       <div class="row" id="nameRow" hidden>
-        <input id="nameIn" type="text" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="NAME" aria-label="Your name, up to three characters">
+        <input id="nameIn" type="text" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="NAME" aria-label="Your name, up to four characters">
         <button id="nameSave" type="button">Save run</button>
       </div>
       <p class="keys" id="nameMsg" hidden>That name isn't allowed on the leaderboard. Please pick another.</p>
@@ -365,6 +371,10 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       </div>
       <p class="keys" id="optHint" hidden>Sound is off. Turn it back on to hear the sliders.</p>
       <button id="optBack" type="button">Back</button>
+      <div class="resetzone">
+        <button id="resetAll" class="danger" type="button">Reset all data</button>
+        <p class="keys" id="resetMsg" aria-live="polite"></p>
+      </div>
     </div>
     <div class="card opts" id="dev" hidden>
       <h2>Welcome developer Keranto!</h2>
@@ -467,6 +477,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   var elDevBack = document.getElementById("devBack");
   var opts = document.getElementById("opts");
   var elBack = document.getElementById("optBack");
+  var elReset = document.getElementById("resetAll"), elResetMsg = document.getElementById("resetMsg");
   var elHint = document.getElementById("optHint");
   var volSfx = document.getElementById("volSfx");
   var volMus = document.getElementById("volMus");
@@ -479,7 +490,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // shining coins: a rare drop from level 10, kept across runs for a future shop
-  var VERSION = "2.43";
+  var VERSION = "2.44";
   Array.prototype.forEach.call(document.querySelectorAll(".ver"), function (el) { el.textContent = "- v" + VERSION; });
   var coins = 0;
   try { coins = parseInt(localStorage.getItem("lantern-moth-coins") || "0", 10) || 0; } catch (e) {}
@@ -1006,7 +1017,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     G = { t: 0, score: 0, streak: 0, light: 100, mx: W / 2, tx: W / 2, inv: 0, shake: 0, level: 1, got: 0, banner: 0, lives: 0, flash: 0, bt: "", bs: "", rb: null, gather: [],
       items: [], haz: [], parts: [], strands: [], spawnL: 0.4, spawnH: 2.2,
       scroll: G ? G.scroll : 0, sd: null, hb: 0, redAt: 3 + Math.floor(rand(0, 2)), neg: false, touched: false,
-      shout: null, fl: null, msDone: 0, ev: null, stuck: 0, struggleT: 0, itsyLatch: false, bossLatch: false, webs: [], pops: [], bonusIn: 12 + Math.floor(rand(0, 11)), coinIn: 25 + Math.floor(rand(0, 21)), coinsRun: 0, lt: 0, itsyNext: 0, rate: 0, pscore: 0, mvx: 0, pstreak: 0, bossNext: 0, slimeNext: 0, bgs: [], evRest: 0, wins: { itsy: 0, boss: 0, slime: 0 }, runT: 0, tut: false };
+      shout: null, fl: null, msDone: 0, ev: null, stuck: 0, struggleT: 0, itsyLatch: false, bossLatch: false, slimeLatch: false, bigPick: "", webs: [], pops: [], bonusIn: 12 + Math.floor(rand(0, 11)), coinIn: 25 + Math.floor(rand(0, 21)), coinsRun: 0, lt: 0, itsyNext: 0, rate: 0, pscore: 0, mvx: 0, pstreak: 0, bossNext: 0, slimeNext: 0, bgs: [], evRest: 0, wins: { itsy: 0, boss: 0, slime: 0 }, runT: 0, tut: false };
   }
   reset();
 
@@ -1167,10 +1178,11 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   try { lastName = localStorage.getItem("lantern-moth-name") || ""; } catch (e) {}
   function saveBoard() { try { localStorage.setItem(BOARD_KEY, JSON.stringify(board)); } catch (e) {} }
   function qualifies(sc) { return sc > 0 && (board.length < 10 || sc > board[board.length - 1].s); }
-  function cleanName(v) { return String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3); }
+  function cleanName(v) { return String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4); }
   // names the online board refuses; keep in sync with NAME_BLOCK in worker/src/index.js
   var NAME_BLOCK = ["ASS", "CUM", "CNT", "COK", "CUN", "DIC", "DIK", "DCK", "FAG", "FCK", "FGT", "FUC", "FUK", "FUQ",
-    "JIZ", "KKK", "KYS", "NAZ", "NGA", "NGR", "NIG", "PUS", "SEX", "SHT", "SLT", "TIT", "TWT", "XXX"];
+    "JIZ", "KKK", "KYS", "NAZ", "NGA", "NGR", "NIG", "PUS", "SEX", "SHT", "SLT", "TIT", "TWT", "XXX",
+    "COCK", "CUNT", "DICK", "FUCK", "NAZI", "PISS", "SHIT", "SLUT", "TITS", "TWAT"];
   function nameOk(n) { return !!n && NAME_BLOCK.indexOf(n) < 0; }
   function addScore(name, sc, lv) {
     var entry = { n: name, s: sc, l: lv, d: Date.now() };
@@ -1211,7 +1223,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
         if (res.status >= 500 || res.status === 429) { if (entry.mine) net.state = "queued"; refreshNet(); return; } // try again later
         var o = readOutbox(); o.shift(); writeOutbox(o); // sent, or refused for good (bad name, impossible score)
         if (entry.mine) {
-          if (res.d && res.d.ok) { net.state = "sent"; net.rank = res.d.rank; net.wrank = res.d.wrank; }
+          if (res.d && res.d.ok) { net.state = res.d.best === false && res.d.wbest === false ? "kept" : "sent"; net.rank = res.d.rank; net.wrank = res.d.wrank; }
           else net.state = res.d && res.d.error === "name" ? "badname" : "refused";
         }
         refreshNet();
@@ -1298,13 +1310,14 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       elLb.appendChild(gap);
       elLb.appendChild(boardRow(me.rank, me.n, me.s, me.l, true));
     }
-    var line = boardTab === "week" ? "This week's best runs. Resets every Monday (UTC)." : "The best runs of all time.";
+    var line = boardTab === "week" ? "Each player's best run this week. Resets every Monday (UTC)." : "Each player's best run of all time.";
     if (me) line += " Your best is #" + me.rank + ".";
     elLbStatus.textContent = line;
   }
   function netLine() {
     if (net.state === "sending") return "Sending your run to the online board…";
-    if (net.state === "sent") return "Posted online: #" + net.rank + " all-time, #" + net.wrank + " this week.";
+    if (net.state === "sent") return "Posted online. You're #" + net.rank + " all-time and #" + net.wrank + " this week.";
+    if (net.state === "kept") return "Posted, but your earlier best still counts: #" + net.rank + " all-time, #" + net.wrank + " this week.";
     if (net.state === "queued") return "You're offline. Your run will be posted online when you reconnect.";
     if (net.state === "badname") return "The online board didn't accept that name, so this run stays on this device only.";
     if (net.state === "refused") return "The online board couldn't accept this run.";
@@ -1512,6 +1525,32 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     card.inert = false;
     goBtn.focus();
   }
+  // ---- Reset all data: three taps (button, confirm, confirm again); it settles back if left alone ----
+  var resetStage = 0, resetTimer = 0;
+  function resetUI(stage) {
+    resetStage = stage;
+    clearTimeout(resetTimer);
+    elReset.classList.toggle("arm2", stage === 2);
+    if (stage === 0) { elReset.textContent = "Reset all data"; elResetMsg.textContent = ""; return; }
+    if (stage === 1) {
+      elReset.textContent = "Erase everything?";
+      elResetMsg.textContent = "This deletes your coins, items, skins, best score, saved runs, name and settings on this device. Scores already on the online leaderboard stay. Tap again to continue.";
+    } else {
+      elReset.textContent = "Yes, erase it all";
+      elResetMsg.textContent = "Last chance. This can't be undone.";
+    }
+    resetTimer = setTimeout(function () { resetUI(0); }, 6000);
+  }
+  elReset.addEventListener("click", function () {
+    if (resetStage < 2) { resetUI(resetStage + 1); return; }
+    try {
+      var doomed = [], k;
+      for (var i = 0; i < localStorage.length; i++) { k = localStorage.key(i); if (k && k.indexOf("lantern-moth") === 0) doomed.push(k); }
+      doomed.forEach(function (key) { localStorage.removeItem(key); });
+    } catch (e) {}
+    location.reload();
+  });
+  elBack.addEventListener("click", function () { resetUI(0); });
   volSfx.addEventListener("input", function () {
     vol.sfx = volSfx.value / 100;
     outSfx.textContent = volSfx.value + "%";
@@ -2034,7 +2073,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
 
 
   // Streak events. Itsy-Bitsy Spider (level 10+, streak 10): spiders shrink and speed up.
-  // The Weaver (level 20+, streak 25): a big spider clears the sky and shoots webs at the moth.
+  // The Weaver (level 20+, streak 20): a big spider clears the sky and shoots webs at the moth.
   var ITSY_LEN = 10, BOSS_LEN = 25, SLIME_LEN = 25;
   // Slime Rain (level 35+, streak 25): a nod to Terraria. Spiders are swapped for green, blue and purple slimes for 25s.
   // Purple is a little bigger than a bat; each size up is slower but hits harder.
@@ -2051,7 +2090,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   function startSlime() {
     var i, o;
     G.ev = { type: "slime", t: 0, dur: SLIME_LEN, bgT: 0 };
-    G.itsyLatch = true; G.bossLatch = true;
+    G.itsyLatch = true; G.bossLatch = true; G.slimeLatch = true;
     G.slimeNext = G.level + 2;
     G.spawnH = Math.min(G.spawnH, 0.3);
     for (i = 0; i < G.haz.length; i++) {
@@ -2065,11 +2104,17 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   function sfxSlimeRain() { [196, 247, 294, 392].forEach(function (f, i) { tone(f, 0.28, "sine", 0.1, f * 1.5, i * 0.12); }); tone(110, 0.9, "triangle", 0.08, 70, 0.1); }
   function sfxSquish() { tone(180, 0.2, "sine", 0.1, 70); tone(90, 0.16, "triangle", 0.05, 50, 0.04); }
   // which streak-25 event is ready (if any). When both are, it's a coin flip.
+  // The Weaver needs a streak of 20, Slime Rain 25. Only one of them per streak. When both are available, a coin flip at
+  // streak 20 decides: if Slime Rain wins, the Weaver holds off and the slimes come at 25 (if the streak gets there).
   function bigReady() {
-    if (G.streak < 25 || G.bossLatch || G.level < G.evRest) return null;
-    var b = G.level >= 20 && G.level >= G.bossNext, sl = G.level >= 35 && G.level >= G.slimeNext;
-    if (b && sl) return Math.random() < 0.5 ? "boss" : "slime";
-    return b ? "boss" : (sl ? "slime" : null);
+    if (G.streak < 20 || G.level < G.evRest) return null;
+    var bOk = G.level >= 20 && G.level >= G.bossNext && !G.bossLatch;
+    var sOk = G.level >= 35 && G.level >= G.slimeNext && !G.slimeLatch;
+    if (bOk && sOk && !G.bigPick) G.bigPick = Math.random() < 0.5 ? "boss" : "slime";
+    if (G.bigPick === "slime") return sOk && G.streak >= 25 ? "slime" : null;
+    if (bOk) return "boss";
+    if (sOk && G.streak >= 25) return "slime";
+    return null;
   }
   function startItsy() {
     G.ev = { type: "itsy", t: 0, dur: ITSY_LEN };
@@ -2085,7 +2130,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     G.haz = [];
     G.ev = { type: "boss", t: 0, dur: BOSS_LEN, bx: W / 2, by: -70, fire: 1.2, pulse: 0, webLeft: 2 + Math.floor(rand(0, 2)) };
     G.webs = [];
-    G.itsyLatch = true; G.bossLatch = true;
+    G.itsyLatch = true; G.bossLatch = true; G.slimeLatch = true;
     // cooldown: 3 levels, 2 from an activation at level 30+, 1 from level 35+ (so he can return the very next level)
     G.bossNext = G.level + Math.max(1, 3 - Math.floor(Math.max(0, G.level - 25) / 5));
     G.banner = 2.2; G.bt = "THE WEAVER"; G.bs = "Dodge his webs. Hold on for " + BOSS_LEN + "s.";
@@ -2126,7 +2171,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   function sfxWebShot() { tone(700, 0.12, "triangle", 0.05, 260); }
   function sfxStuck() { tone(240, 0.22, "sawtooth", 0.07, 110); }
   function sfxStruggle() { tone(420 + Math.random() * 120, 0.05, "square", 0.03, 300); }
-  var WEB_HOLD = 3.0, WEB_WRIGGLE = 0.06; // a web holds for 3s; each tap or key press shaves off 0.06s
+  var WEB_HOLD = 2.5, WEB_WRIGGLE = 0.06; // a web holds for 2.5s; each tap or key press shaves off 0.06s
   function struggle() { if (G.stuck > 0) G.stuck = Math.max(0, G.stuck - WEB_WRIGGLE); }
   // aim partway ahead of the moth: half its current drift over the shot's flight time, capped, so it is not a perfect read
   function aimShot(ox, oy, speed) {
@@ -2332,7 +2377,8 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
 
     if (!G.tut) {
       if (G.streak < 10) G.itsyLatch = false;
-      if (G.streak < 25) G.bossLatch = false;
+      if (G.streak < 20) { G.bossLatch = false; G.bigPick = ""; }
+      if (G.streak < 25) G.slimeLatch = false;
       var big = (!G.sd && (!G.ev || (G.ev.type === "itsy" && G.ev.hand === undefined))) ? bigReady() : null;
       if (!G.ev && !G.sd) {
         if (big === "boss") startBoss();
