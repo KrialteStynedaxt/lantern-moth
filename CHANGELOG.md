@@ -1,6 +1,6 @@
 # Lantern Moth changelog
 
-Each update raises the version by 0.01. The live game is always `index.html`; every version is also tagged in Git (for example `v2.40`), so any older build can be restored.
+Each update raises the version by 0.01. The live game is always `index.html`; every version is its own commit titled "Lantern Moth v2.xx", so any older build can be restored from the commit history.
 
 ## v2.40 — 2026-10-19
 - iPhone fixes. Opening the game somewhere scripts can't run (Files app, Quick Look, message or email previews) now shows a clear "open it from a web link" message instead of a dead screen.
