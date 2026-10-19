@@ -2,6 +2,13 @@
 
 Each update raises the version by 0.01. The live game is always `index.html`; every version is its own commit titled "Lantern Moth v2.xx" and automatically gets a tagged Release with a downloadable `LanternMoth-v2.xx.html`.
 
+## v2.41 — 2026-10-19
+- **Online leaderboard.** The Leaderboard now has three tabs: **All-time** and **This week** (top 50 worldwide, resets Mondays UTC) and **My runs** (your local top 10).
+- Your own entries are highlighted, and your rank is shown even if you're outside the top 50.
+- Signing your name on a top-10 run posts it online. Offline runs wait in an outbox and are sent when you reconnect.
+- Offensive names are refused, and developer-start runs stay off the boards.
+- New score server (`worker/`, a Cloudflare Worker with a D1 database) that rejects impossible scores and floods. It's deployed automatically by GitHub Actions.
+
 ## v2.40 — 2026-10-19
 - iPhone fixes. Opening the game somewhere scripts can't run (Files app, Quick Look, message or email previews) now shows a clear "open it from a web link" message instead of a dead screen.
 - An on-screen error bar appears if anything fails while loading or playing, with the error and line number.

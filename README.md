@@ -17,3 +17,10 @@ A night-sky arcade game. Fly into lanterns to keep your glow alive, dodge spider
 - Each update raises the version by 0.01 and gets an entry in [CHANGELOG.md](CHANGELOG.md).
 - Each version is its own commit titled "Lantern Moth v2.xx".
 - Every new version automatically gets a tag (`v2.xx`) and a **Release** with its changelog notes and a downloadable `LanternMoth-v2.xx.html`. See the Releases list on the repository page.
+
+## Online leaderboard
+- Scores are stored by the score server in `worker/` (a Cloudflare Worker with a D1 database called `lantern-moth-scores`). GitHub Actions redeploys it automatically whenever `worker/` changes.
+- The server refuses offensive names, impossible scores and rapid-fire submissions. Players are anonymous: only the name, score, level, run length, game version and a random device id are stored.
+- **Removing a score:** in the Cloudflare dashboard, open **Storage & databases → D1 → lantern-moth-scores → Console** and run:
+  - `SELECT id, name, score, level, created FROM scores ORDER BY score DESC LIMIT 50;` to find it
+  - `UPDATE scores SET hidden = 1 WHERE id = <id>;` to hide it (set `hidden = 0` to bring it back)

@@ -1,6 +1,7 @@
 <!doctype html>
 <!--
-  Lantern Moth v2.40
+  Lantern Moth v2.41
+  v2.41: online leaderboard (All-time / This week / My runs) backed by the Cloudflare score server in worker/.
   v2.40: iPhone fixes: a clear message when the game is opened somewhere JavaScript can't run (Files / Quick Look previews),
          an on-screen error report if anything fails to load, and a layout fallback for iOS 15 and older.
   v2.39: the play area grows taller to fit tall screens (no stretching; falling speeds scale so every screen is equally fair);
@@ -231,6 +232,15 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
 .lb button:hover { color: var(--ink); filter: none; }
 .lb button.arm { color: var(--danger); border-color: var(--danger); }
 .lb .empty { display: block; color: var(--muted); border: 0; }
+.lb li.gap { display: block; text-align: center; color: var(--muted); border: 0; padding: 0; letter-spacing: 0.3em; }
+.lb { max-width: 340px; }
+.lb li { grid-template-columns: 4.2ch 4.5ch 1fr auto 4.6em; }
+.lb li span:nth-child(3) { text-align: right; }
+.tabs { display: flex; gap: 6px; width: 100%; max-width: 340px; }
+.tabs .tab { flex: 1; padding: 8px 6px; font-size: clamp(11px, 3.1cqw, 12px); background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; }
+.tabs .tab:hover { color: var(--ink); filter: none; }
+.tabs .tab[aria-selected="true"] { color: #1a1405; background: var(--glow); border-color: var(--glow); }
+#board p#lbStatus { min-height: 1.5em; max-width: 340px; }
 
 .card.shop { gap: 10px; }
 .card.shop > :first-child { margin-top: 0; }
@@ -319,7 +329,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       <div class="meter" id="meter" role="meter" aria-label="Glow" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="meterfill"></i></div>
     </div>
     <div class="card" id="card">
-      <p class="eyebrow">Lantern Moth <span class="ver">- v2.40</span></p>
+      <p class="eyebrow">Lantern Moth <span class="ver">- v2.41</span></p>
       <h2 id="ctitle">Keep the glow alive</h2>
       <p id="cbody">Fly into lanterns to refill your light and dodge the spiders. Catch enough lanterns to level up. Every tenth level earns a rebirth, a second chance when your glow goes out.</p>
       <p class="keys" id="ckeys">Arrow keys or A / D to steer. On a touch screen, drag. P or Esc pauses. New here? Try the tutorial.</p>
@@ -331,6 +341,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
         <input id="nameIn" type="text" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="NAME" aria-label="Your name, up to three characters">
         <button id="nameSave" type="button">Save run</button>
       </div>
+      <p class="keys" id="nameMsg" hidden>That name isn't allowed on the leaderboard. Please pick another.</p>
       <div class="row">
         <button id="shopBtn" class="ghost" type="button">Shop</button>
         <button id="boardBtn" class="ghost" type="button">Leaderboard</button>
@@ -380,6 +391,12 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     </div>
     <div class="card opts" id="board" hidden>
       <h2>Leaderboard</h2>
+      <div class="tabs" role="tablist" aria-label="Leaderboards">
+        <button class="tab" type="button" role="tab" data-tab="all" aria-selected="true">All-time</button>
+        <button class="tab" type="button" role="tab" data-tab="week" aria-selected="false">This week</button>
+        <button class="tab" type="button" role="tab" data-tab="mine" aria-selected="false">My runs</button>
+      </div>
+      <p class="keys" id="lbStatus" aria-live="polite"></p>
       <ol class="lb" id="lbList"></ol>
       <button id="boardBack" type="button">Back</button>
     </div>
@@ -433,6 +450,9 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   var elBoard = document.getElementById("board");
   var elBoardBack = document.getElementById("boardBack");
   var elLb = document.getElementById("lbList");
+  var elLbStatus = document.getElementById("lbStatus");
+  var elLbTabs = document.querySelectorAll("#board .tab");
+  var elNameMsg = document.getElementById("nameMsg");
   var elDev = document.getElementById("dev");
   var elShop = document.getElementById("shop");
   var elShopBtn = document.getElementById("shopBtn");
@@ -457,7 +477,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // shining coins: a rare drop from level 10, kept across runs for a future shop
-  var VERSION = "2.40";
+  var VERSION = "2.41";
   Array.prototype.forEach.call(document.querySelectorAll(".ver"), function (el) { el.textContent = "- v" + VERSION; });
   var coins = 0;
   try { coins = parseInt(localStorage.getItem("lantern-moth-coins") || "0", 10) || 0; } catch (e) {}
@@ -984,7 +1004,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     G = { t: 0, score: 0, streak: 0, light: 100, mx: W / 2, tx: W / 2, inv: 0, shake: 0, level: 1, got: 0, banner: 0, lives: 0, flash: 0, bt: "", bs: "", rb: null, gather: [],
       items: [], haz: [], parts: [], strands: [], spawnL: 0.4, spawnH: 2.2,
       scroll: G ? G.scroll : 0, sd: null, hb: 0, redAt: 3 + Math.floor(rand(0, 2)), neg: false, touched: false,
-      shout: null, fl: null, msDone: 0, ev: null, stuck: 0, struggleT: 0, itsyLatch: false, bossLatch: false, webs: [], pops: [], bonusIn: 12 + Math.floor(rand(0, 11)), coinIn: 25 + Math.floor(rand(0, 21)), coinsRun: 0, lt: 0, itsyNext: 0, rate: 0, pscore: 0, mvx: 0, pstreak: 0, bossNext: 0, slimeNext: 0, bgs: [], evRest: 0, wins: { itsy: 0, boss: 0, slime: 0 }, tut: false };
+      shout: null, fl: null, msDone: 0, ev: null, stuck: 0, struggleT: 0, itsyLatch: false, bossLatch: false, webs: [], pops: [], bonusIn: 12 + Math.floor(rand(0, 11)), coinIn: 25 + Math.floor(rand(0, 21)), coinsRun: 0, lt: 0, itsyNext: 0, rate: 0, pscore: 0, mvx: 0, pstreak: 0, bossNext: 0, slimeNext: 0, bgs: [], evRest: 0, wins: { itsy: 0, boss: 0, slime: 0 }, runT: 0, tut: false };
   }
   reset();
 
@@ -1138,7 +1158,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     elDevCoins.textContent = "Added! Coins: " + coins;
   });
 
-  // ---- leaderboard: top ten runs saved in this browser, three-character names ----
+  // ---- leaderboard: online All-time / This week boards, plus the top ten runs saved in this browser ----
   var BOARD_KEY = "lantern-moth-board", pending = null, lastName = "";
   var board = [];
   try { board = JSON.parse(localStorage.getItem(BOARD_KEY) || "[]"); if (!Array.isArray(board)) board = []; } catch (e) { board = []; }
@@ -1146,6 +1166,10 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   function saveBoard() { try { localStorage.setItem(BOARD_KEY, JSON.stringify(board)); } catch (e) {} }
   function qualifies(sc) { return sc > 0 && (board.length < 10 || sc > board[board.length - 1].s); }
   function cleanName(v) { return String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3); }
+  // names the online board refuses; keep in sync with NAME_BLOCK in worker/src/index.js
+  var NAME_BLOCK = ["ASS", "CUM", "CNT", "COK", "CUN", "DIC", "DIK", "DCK", "FAG", "FCK", "FGT", "FUC", "FUK", "FUQ",
+    "JIZ", "KKK", "KYS", "NAZ", "NGA", "NGR", "NIG", "PUS", "SEX", "SHT", "SLT", "TIT", "TWT", "XXX"];
+  function nameOk(n) { return !!n && NAME_BLOCK.indexOf(n) < 0; }
   function addScore(name, sc, lv) {
     var entry = { n: name, s: sc, l: lv, d: Date.now() };
     board.push(entry);
@@ -1154,17 +1178,69 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     saveBoard();
     return board.indexOf(entry);
   }
+
+  // ---- online scores: sent to the Lantern Moth score server; kept in an outbox and retried when offline ----
+  var SCORES_API = "https://lantern-moth-scores.krialtestynedaxt.workers.dev/scores";
+  var OUTBOX_KEY = "lantern-moth-outbox", clientId = "", outboxBusy = false;
+  var net = { state: "", rank: 0, wrank: 0 }; // what happened to the last run sent online
+  try { clientId = localStorage.getItem("lantern-moth-client") || ""; } catch (e) {}
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(clientId)) {
+    clientId = "m" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 8);
+    try { localStorage.setItem("lantern-moth-client", clientId); } catch (e) {}
+  }
+  function readOutbox() { try { var o = JSON.parse(localStorage.getItem(OUTBOX_KEY) || "[]"); return Array.isArray(o) ? o : []; } catch (e) { return []; } }
+  function writeOutbox(o) { try { localStorage.setItem(OUTBOX_KEY, JSON.stringify(o.slice(-20))); } catch (e) {} }
+  function netFetch(url, opts, ms) {
+    // fetch with a time limit, so a bad connection never leaves the board spinning
+    var ctl = window.AbortController ? new AbortController() : null, timer;
+    if (ctl) { opts.signal = ctl.signal; timer = setTimeout(function () { ctl.abort(); }, ms || 8000); }
+    return fetch(url, opts).then(function (r) { clearTimeout(timer); return r; }, function (err) { clearTimeout(timer); throw err; });
+  }
+  function flushOutbox() {
+    if (outboxBusy || !window.fetch) return;
+    var box = readOutbox();
+    if (!box.length) return;
+    outboxBusy = true;
+    var entry = box[0];
+    netFetch(SCORES_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry) })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }, function () { return { status: r.status, d: {} }; }); })
+      .then(function (res) {
+        outboxBusy = false;
+        if (res.status >= 500 || res.status === 429) { if (entry.mine) net.state = "queued"; refreshNet(); return; } // try again later
+        var o = readOutbox(); o.shift(); writeOutbox(o); // sent, or refused for good (bad name, impossible score)
+        if (entry.mine) {
+          if (res.d && res.d.ok) { net.state = "sent"; net.rank = res.d.rank; net.wrank = res.d.wrank; }
+          else net.state = res.d && res.d.error === "name" ? "badname" : "refused";
+        }
+        refreshNet();
+        flushOutbox();
+      }, function () { outboxBusy = false; if (entry.mine) net.state = "queued"; refreshNet(); });
+  }
+  function queueOnline(name, s, l, dur) {
+    var o = readOutbox();
+    o.forEach(function (e) { e.mine = false; });
+    o.push({ name: name, score: s, level: l, dur: dur, version: VERSION, client: clientId, mine: true });
+    writeOutbox(o);
+    net = { state: "sending", rank: 0, wrank: 0 };
+    flushOutbox();
+  }
+  window.addEventListener("online", flushOutbox);
+  setTimeout(flushOutbox, 1500);
+
   function commitPending(name) {
     if (!pending) return -1;
-    var n = cleanName(name) || cleanName(lastName) || "MOTH";
+    var n = cleanName(name);
+    if (!nameOk(n)) n = nameOk(cleanName(lastName)) ? cleanName(lastName) : "MOTH";
     try { localStorage.setItem("lantern-moth-name", n); } catch (e) {}
     lastName = n;
     var rank = addScore(n, pending.s, pending.l);
+    queueOnline(n, pending.s, pending.l, pending.dur);
     pending = null;
     elNameRow.hidden = true;
     return rank;
   }
   function renderBoard(mark) {
+    boardMark = mark;
     elLb.textContent = "";
     if (!board.length) {
       var em = document.createElement("li"); em.className = "empty"; em.textContent = "No scores yet. Fly a run and sign your name.";
@@ -1175,10 +1251,10 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       if (i === mark) li.className = "me";
       var a = document.createElement("span"); a.textContent = i + 1;
       var b = document.createElement("b"); b.textContent = e.n;
-      var c = document.createElement("span"); c.textContent = e.s;
+      var c = document.createElement("span"); c.textContent = fmt(e.s);
       var d = document.createElement("small"); d.textContent = "LV " + e.l;
       var x = document.createElement("button");
-      x.type = "button"; x.textContent = "Clear"; x.setAttribute("aria-label", "Clear " + e.n + "'s score of " + e.s);
+      x.type = "button"; x.textContent = "Clear"; x.setAttribute("aria-label", "Clear " + e.n + "'s score of " + e.s + " from this device");
       x.addEventListener("click", function () {
         // first click arms it, a second click within a couple of seconds removes the score
         if (!x.classList.contains("arm")) {
@@ -1194,11 +1270,72 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       elLb.appendChild(li);
     });
   }
-  function openBoard(mark) {
-    renderBoard(mark === undefined ? -1 : mark);
+  function boardRow(rank, name, score, level, me) {
+    var li = document.createElement("li");
+    if (me) li.className = "me";
+    var a = document.createElement("span"); a.textContent = rank;
+    var b = document.createElement("b"); b.textContent = name;
+    var c = document.createElement("span"); c.textContent = fmt(score);
+    var d = document.createElement("small"); d.textContent = "LV " + level;
+    var x = document.createElement("i");
+    li.appendChild(a); li.appendChild(b); li.appendChild(c); li.appendChild(d); li.appendChild(x);
+    return li;
+  }
+  function renderGlobal(data) {
+    elLb.textContent = "";
+    var top = (data && data.top) || [];
+    if (!top.length) {
+      var em = document.createElement("li"); em.className = "empty";
+      em.textContent = boardTab === "week" ? "No scores yet this week. Be the first!" : "No scores yet. Be the first!";
+      elLb.appendChild(em);
+    }
+    top.forEach(function (r) { elLb.appendChild(boardRow(r.rank, r.n, r.s, r.l, r.me)); });
+    var me = data && data.me;
+    if (me && me.rank > top.length) {
+      var gap = document.createElement("li"); gap.className = "gap"; gap.textContent = "···";
+      elLb.appendChild(gap);
+      elLb.appendChild(boardRow(me.rank, me.n, me.s, me.l, true));
+    }
+    var line = boardTab === "week" ? "This week's best runs. Resets every Monday (UTC)." : "The best runs of all time.";
+    if (me) line += " Your best is #" + me.rank + ".";
+    elLbStatus.textContent = line;
+  }
+  function netLine() {
+    if (net.state === "sending") return "Sending your run to the online board…";
+    if (net.state === "sent") return "Posted online: #" + net.rank + " all-time, #" + net.wrank + " this week.";
+    if (net.state === "queued") return "You're offline. Your run will be posted online when you reconnect.";
+    if (net.state === "badname") return "The online board didn't accept that name, so this run stays on this device only.";
+    if (net.state === "refused") return "The online board couldn't accept this run.";
+    return "";
+  }
+  function refreshNet() { if (boardOpen && boardTab === "mine") elLbStatus.textContent = netLine() || "Your top 10 runs on this device. Clearing only removes them here."; }
+  var boardTab = "all", boardMark = -1, boardReq = 0, boardCache = {};
+  function selectTab(t) {
+    boardTab = t;
+    Array.prototype.forEach.call(elLbTabs, function (b) { b.setAttribute("aria-selected", b.getAttribute("data-tab") === t ? "true" : "false"); });
+    if (t === "mine") { renderBoard(boardMark); refreshNet(); return; }
+    var my = ++boardReq;
+    if (boardCache[t]) renderGlobal(boardCache[t]); else { elLb.textContent = ""; }
+    elLbStatus.textContent = boardCache[t] ? elLbStatus.textContent : "Loading the online board…";
+    if (!window.fetch) { elLbStatus.textContent = "This browser can't reach the online board."; return; }
+    netFetch(SCORES_API + "?board=" + t + "&limit=50&client=" + encodeURIComponent(clientId), { method: "GET" })
+      .then(function (r) { if (!r.ok) throw new Error("status " + r.status); return r.json(); })
+      .then(function (d) { boardCache[t] = d; if (my === boardReq && boardOpen && boardTab === t) renderGlobal(d); },
+        function () {
+          if (my !== boardReq || !boardOpen || boardTab !== t) return;
+          if (!boardCache[t]) { elLb.textContent = ""; }
+          elLbStatus.textContent = "Can't reach the online board right now. Your own runs are under My runs.";
+        });
+  }
+  Array.prototype.forEach.call(elLbTabs, function (b) {
+    b.addEventListener("click", function () { selectTab(b.getAttribute("data-tab")); });
+  });
+  function openBoard(mark, tab) {
+    boardMark = mark === undefined ? -1 : mark;
     boardOpen = true;
     elBoard.hidden = false;
     card.inert = true;
+    selectTab(tab || "all");
     elBoardBack.focus({ preventScroll: true }); elBoard.scrollTop = 0;
   }
   function closeBoard() {
@@ -1211,12 +1348,15 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   elBoardBack.addEventListener("click", closeBoard);
   function saveName() {
     if (!pending) return;
+    var n = cleanName(elName.value);
+    if (n && !nameOk(n)) { elNameMsg.hidden = false; elName.focus(); elName.select(); return; }
+    elNameMsg.hidden = true;
     var rank = commitPending(elName.value);
-    cBody.textContent = cBody.textContent.replace(/ Sign your name below\.$/, "") + " Saved as #" + (rank + 1) + ".";
-    openBoard(rank);
+    cBody.textContent = cBody.textContent.replace(/ Sign your name.*$/, "") + " Saved as your #" + (rank + 1) + ".";
+    openBoard(rank, "mine");
   }
   elNameSave.addEventListener("click", saveName);
-  elName.addEventListener("input", function () { elName.value = cleanName(elName.value); });
+  elName.addEventListener("input", function () { elName.value = cleanName(elName.value); elNameMsg.hidden = true; });
 
   function end() {
     bossMusic(false, 0);
@@ -1236,9 +1376,9 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     cBody.textContent = (isBest ? "New best: " : "Lumens: ") + s + (isBest ? "" : ". Best is " + best + ".");
     cKeys.textContent = "Reached level " + G.level + "." + (G.coinsRun ? " Coins this run: " + G.coinsRun + "." : "");
     goBtn.textContent = "Fly again";
-    pending = qualifies(s) && !G.dev ? { s: s, l: G.level } : null;
+    pending = qualifies(s) && !G.dev ? { s: s, l: G.level, dur: Math.round(G.runT) } : null;
     if (pending) {
-      cBody.textContent += (isBest ? "." : "") + " You made the leaderboard. Sign your name below.";
+      cBody.textContent += (isBest ? "." : "") + " It's one of your top 10 runs. Sign your name to post it on the online leaderboard.";
       elName.value = cleanName(lastName);
     }
     showCard("over");
@@ -2130,6 +2270,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   }
 
   function update(dt) {
+    G.runT += dt;
     if (G.rb) { updateRebirth(dt); return; }
     if (G.tut && T) {
       fairyUpdate(dt);

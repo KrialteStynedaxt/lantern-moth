@@ -1,0 +1,12 @@
+# Lantern Moth score server (Cloudflare Worker + D1 database).
+# Deployed automatically by .github/workflows/worker.yml whenever anything in worker/ changes.
+name = "lantern-moth-scores"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lantern-moth-scores"
+database_id = "a95ef5f8-c600-4e30-88ed-900e553dd712"
+migrations_dir = "migrations"
