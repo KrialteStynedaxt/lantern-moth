@@ -1,0 +1,3110 @@
+<!doctype html>
+<!--
+  Lantern Moth v2.40
+  v2.40: iPhone fixes: a clear message when the game is opened somewhere JavaScript can't run (Files / Quick Look previews),
+         an on-screen error report if anything fails to load, and a layout fallback for iOS 15 and older.
+  v2.39: the play area grows taller to fit tall screens (no stretching; falling speeds scale so every screen is equally fair);
+         new Slime Rain event at level 35.
+  v2.38: Weaver overhaul (tip-first, bigger, hand-drawn-style web shots; venom only after 2-3 webs; 8-eyed head hanging
+         below the body; five anchor strands); title screen centred and raised.
+  v2.37: Hebrew Character moth is the default; Polygrammate Wings skin in the shop; rebirth gives a 2-level
+         rest from spider events; new corner-web Weaver shot with a hitbox that matches its shape; version in the title.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b1020">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lantern Moth">
+<title>Lantern Moth</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;800&display=swap">
+<script>
+  // If anything fails while loading, say so on screen instead of leaving a page that silently ignores taps.
+  (function () {
+    function show(msg) {
+      var b = document.getElementById("errbar");
+      if (!b) { b = document.createElement("div"); b.id = "errbar"; (document.body || document.documentElement).appendChild(b); }
+      b.textContent = "Lantern Moth hit an error: " + msg + "  (screenshot this for debugging)";
+      b.hidden = false;
+    }
+    window.addEventListener("error", function (e) { show((e.message || "unknown error") + (e.lineno ? " at line " + e.lineno : "")); });
+    window.addEventListener("unhandledrejection", function (e) { show(String(e.reason && e.reason.message || e.reason || "unknown error")); });
+  })();
+</script>
+<style>
+/* Layout: the whole viewport is the stage. A portrait 2:3 play frame is centred in it, sized to fit any screen.
+   The HUD bar overlays the top of the frame so lanterns drop out from under it. Everything inside the frame
+   scales with the frame's own width (cqw units), so it reads the same on a phone, a tablet or a monitor. */
+:root {
+  --night: #0b1020;
+  --dusk: #19223f;
+  --ink: #e9e7f2;
+  --muted: #8d93b3;
+  --glow: #ffc861;
+  --danger: #ff6179;
+  --line: #2a3459;
+  --font-display: "Syne", "Trebuchet MS", sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+/* ---- viewport: fill the real visible screen (dvh follows mobile address bars), no scrolling, no rubber-banding ---- */
+html {
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--night);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--night);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  display: flex;
+  /* keep clear of notches, rounded corners and home bars */
+  padding:
+    max(8px, env(safe-area-inset-top, 0px))
+    max(8px, env(safe-area-inset-right, 0px))
+    max(8px, env(safe-area-inset-bottom, 0px))
+    max(8px, env(safe-area-inset-left, 0px));
+  touch-action: manipulation;          /* no double-tap zoom */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;                   /* no accidental text selection while dragging */
+  -webkit-touch-callout: none;         /* no long-press callout menu on iOS */
+}
+input { -webkit-user-select: text; user-select: text; }
+
+.stage { flex: 1; min-width: 0; min-height: 0; container-type: size; display: flex; justify-content: center; align-items: center; }
+.frame {
+  position: relative;
+  /* width is unchanged; the height may grow past 2:3 on tall screens, up to a modern-phone shape (1 : 2.2).
+     The game world grows with it (400 wide, 600 to 880 tall), so nothing is ever stretched. */
+  width: min(100cqw, 66.667cqh);
+  height: min(100cqh, min(100cqw, 66.667cqh) * 2.2);
+  container-type: inline-size;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--dusk);
+}
+canvas { display: block; width: 100%; height: 100%; touch-action: none; transition: filter 1.2s ease; }
+
+/* ---- HUD: one compact bar across the top of the play area ---- */
+.hud {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 8;
+  font-size: clamp(8px, 2.9cqw, 13px);
+  padding: 0.7em 0.85em 0.6em;
+  display: flex; flex-direction: column; gap: 0.55em;
+  background: linear-gradient(180deg, rgba(11,16,32,0.95) 0%, rgba(11,16,32,0.82) 70%, rgba(11,16,32,0.6) 100%);
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;            /* a drag that starts on the bar still steers the moth */
+}
+.hud button { pointer-events: auto; }
+.hrow { display: flex; align-items: center; gap: 0.9em; min-width: 0; }
+.hs { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.lbl { font-size: 0.78em; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.hs.sc { flex: 1 1 auto; }
+.hs.sc > b { font-weight: 500; font-size: 1.55em; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.best { font-size: 0.78em; color: var(--muted); white-space: nowrap; }
+.best span { color: var(--ink); }
+.hs.lv { flex: 0 1 7.6em; }
+.hs.lv .lbl b { color: var(--ink); font-weight: 500; font-size: 1.35em; letter-spacing: 0.02em; margin-left: 0.3em; }
+.lprog { display: flex; align-items: center; gap: 0.45em; margin-top: 0.35em; }
+.mini { flex: 1; min-width: 2.5em; height: 0.42em; border-radius: 1em; background: var(--dusk); overflow: hidden; }
+.mini i { display: block; height: 100%; width: 100%; background: #fff2cf; transform-origin: left; transform: scaleX(0); transition: transform 0.25s; }
+.lprog small { font-size: 0.85em; white-space: nowrap; }
+.chips { display: flex; flex-direction: column; gap: 0.3em; }
+.chip { display: flex; align-items: center; gap: 0.45em; white-space: nowrap; }
+.chip b { font-weight: 500; font-size: 1.05em; }
+.ico-reb { display: inline-grid; place-items: center; width: 1.25em; height: 1.25em; margin: -0.125em -0.125em; font-style: normal; }
+.polaris { width: 100%; height: 100%; display: block; overflow: visible; }
+.ico-coin { display: inline-block; width: 0.85em; height: 0.85em; margin: 0 0.075em; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ffffff, #dde4ee 45%, #9aa5b8 80%, #6f7a8e); box-shadow: 0 0 0.35em rgba(214,226,242,0.45); }
+.hbtns { display: flex; gap: 0.35em; margin-left: auto; }
+.hud .ib {
+  width: 2.7em; height: 2.7em; padding: 0; display: grid; place-items: center;
+  background: rgba(25,34,63,0.75); color: var(--muted);
+  border: 1px solid var(--line); border-radius: 0.5em; font-size: 1em;
+}
+.hud .ib:hover { color: var(--ink); filter: none; }
+.hud .ib:disabled { opacity: 0.4; cursor: default; }
+.ib svg { width: 1.4em; height: 1.4em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ib .alt-ic { display: none; }
+.ib[aria-pressed="true"] .alt-ic { display: block; }
+.ib[aria-pressed="true"] .main-ic { display: none; }
+.meter { height: 0.5em; border-radius: 1em; background: var(--dusk); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 100%; background: var(--glow); transform-origin: left; transition: background 0.2s; }
+.meter.low i { background: var(--danger); }
+.meter.hl { box-shadow: 0 0 0 2px var(--glow); animation: pulse 1s ease-in-out infinite; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- overlay cards: sit below the HUD, scale with the frame, and scroll instead of clipping when space runs out ---- */
+button {
+  font: inherit; font-weight: 500; letter-spacing: 0.04em;
+  font-size: clamp(12px, 3.5cqw, 14px);
+  background: var(--glow); color: #1a1405;
+  border: 0; border-radius: 4px;
+  padding: clamp(9px, 2.8cqw, 12px) clamp(14px, 5.2cqw, 22px);
+  cursor: pointer;
+}
+button:hover { filter: brightness(1.08); }
+button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-size: clamp(11px, 3.1cqw, 12px); }
+button.ghost:hover { color: var(--ink); filter: none; }
+button.alt { background: transparent; color: var(--glow); border: 1px solid var(--glow); }
+button.alt:hover { background: rgba(255,200,97,0.12); filter: none; }
+
+.card {
+  position: absolute; left: 0; right: 0; bottom: 0; top: var(--hud-h, 0px);
+  z-index: 5;
+  display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start;
+  gap: clamp(8px, 3.2cqw, 14px);
+  padding: clamp(14px, 7cqw, 34px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  background: linear-gradient(180deg, rgba(11,16,32,0.55), rgba(11,16,32,0.9));
+}
+/* auto margins centre the content when it fits, and fall away to let it scroll from the top when it doesn't */
+.card > :first-child { margin-top: auto; }
+.card > :last-child { margin-bottom: auto; }
+/* main menu: the game's name is the big title (with the version beside it), the card's message is the small line under it */
+.card .eyebrow { font-family: var(--font-display); font-weight: 800; font-size: clamp(24px, 9cqw, 44px); line-height: 1.02; letter-spacing: 0.01em; color: var(--glow); max-width: none; text-wrap: balance; }
+.card .eyebrow .ver { font-size: 0.42em; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; vertical-align: 0.35em; }
+#card h2 { font-size: clamp(11px, 3.2cqw, 13px); letter-spacing: 0.22em; text-transform: uppercase; line-height: 1.3; color: var(--ink); }
+.card h2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(24px, 9cqw, 44px); line-height: 1.02; margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
+.card p { margin: 0; max-width: 34ch; color: var(--muted); line-height: 1.55; font-size: clamp(12px, 3.5cqw, 14px); }
+.card p.big { color: var(--ink); font-size: clamp(14px, 4cqw, 16px); }
+.keys { font-size: clamp(11px, 3cqw, 12px); color: var(--muted); }
+.card p.keys { font-size: clamp(11px, 3cqw, 12px); }
+.row { display: flex; flex-wrap: wrap; gap: clamp(7px, 2.4cqw, 10px); }
+/* main card: everything centred, and the block sits about 3/5 of the way up so the moth shows below it.
+   The ::after spacer takes up to 28% of the height under the block and gives it back when space is tight. */
+#card { align-items: center; text-align: center; background: linear-gradient(180deg, rgba(11,16,32,0.72) 0%, rgba(11,16,32,0.78) 55%, rgba(11,16,32,0.25) 88%, rgba(11,16,32,0.1) 100%); }
+#card { gap: clamp(7px, 2.6cqw, 13px); }
+#card::after { content: ""; flex: 0 1 28%; } /* shrinks away on short screens so the card never has to scroll */
+#card p { line-height: 1.5; max-width: 44ch; }
+#card p#cbody:not(.big) { font-size: clamp(12px, 3.3cqw, 14px); }
+#card .row { justify-content: center; }
+#card .row button.ghost { padding: clamp(7px, 2.2cqw, 10px) clamp(12px, 4.2cqw, 18px); }
+#card p { text-wrap: balance; }
+.card.opts { z-index: 6; background: linear-gradient(180deg, #0e1429, #0b1020); }
+
+.slider { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 300px; }
+.slider label { display: flex; justify-content: space-between; font-size: clamp(11px, 3cqw, 12px); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.slider output { color: var(--ink); font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; accent-color: var(--glow); margin: 0; }
+input[type="range"]:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+input[type="text"] { font: inherit; font-weight: 500; font-size: 16px; letter-spacing: 0.3em; text-transform: uppercase; width: 6.5ch; background: rgba(11,16,32,0.8); color: var(--ink); border: 1px solid var(--glow); border-radius: 4px; padding: 9px 12px; }
+input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+.fairy { position: absolute; z-index: 4; left: 3%; right: 3%; top: 36%; display: flex; gap: 10px; align-items: flex-start; padding: clamp(8px, 2.6cqw, 12px); background: rgba(11,16,32,0.88); border: 1px solid var(--line); border-radius: 6px; }
+.fairy .ftext { min-width: 0; flex: 1; }
+.fairy b { font-family: var(--font-display); font-size: clamp(12px, 3.5cqw, 14px); letter-spacing: 0.06em; color: var(--glow); }
+.fairy p { margin: 4px 0 8px; line-height: 1.5; font-size: clamp(12px, 3.75cqw, 15px); color: var(--ink); min-height: 1.5em; }
+.fairy .frow { display: flex; flex-wrap: wrap; gap: 8px; }
+.fairy button { padding: 8px 16px; font-size: clamp(12px, 3.25cqw, 13px); }
+
+.lb { list-style: none; margin: 0; padding: 0; width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 6px; font-variant-numeric: tabular-nums; font-size: clamp(12px, 3.5cqw, 14px); }
+.lb li { display: grid; grid-template-columns: 2.2ch 6ch 1fr auto auto; gap: clamp(6px, 2.4cqw, 10px); align-items: baseline; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.lb li span:first-child, .lb li small { color: var(--muted); }
+.lb li b { font-weight: 500; letter-spacing: 0.12em; }
+.lb li.me, .lb li.me span:first-child, .lb li.me small { color: var(--glow); }
+.lb button { padding: 3px 9px; font-size: 11px; background: transparent; color: var(--muted); border: 1px solid var(--line); letter-spacing: 0.02em; }
+.lb button:hover { color: var(--ink); filter: none; }
+.lb button.arm { color: var(--danger); border-color: var(--danger); }
+.lb .empty { display: block; color: var(--muted); border: 0; }
+
+.card.shop { gap: 10px; }
+.card.shop > :first-child { margin-top: 0; }
+.card.shop > * { flex: none; }
+.card.shop h2 { font-size: clamp(22px, 7cqw, 30px); }
+.shophead { display: flex; align-items: center; gap: clamp(6px, 2.5cqw, 12px); width: 100%; }
+.shophead canvas { flex: none; width: clamp(84px, 27cqw, 118px); height: auto; aspect-ratio: 1; }
+.coinline { color: var(--ink); }
+.card p.coinline { color: var(--ink); }
+.coinline b { color: #dfe6f0; font-weight: 500; }
+.card p.lumisay { min-height: 2.9em; color: var(--ink); font-size: clamp(12px, 3.25cqw, 13px); max-width: none; }
+.wares { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.ware { display: grid; grid-template-columns: auto 1fr auto; gap: 4px clamp(6px, 2.4cqw, 10px); align-items: center; padding: clamp(7px, 2.2cqw, 9px) clamp(8px, 2.8cqw, 11px); border: 1px solid var(--line); border-radius: 6px; background: rgba(25,34,63,0.55); }
+.ware canvas { width: clamp(34px, 11cqw, 44px); height: auto; aspect-ratio: 88 / 72; }
+.ware .ico { width: clamp(34px, 11cqw, 44px); height: clamp(28px, 9cqw, 36px); display: grid; place-items: center; font-size: clamp(18px, 5.5cqw, 22px); }
+.ware .ico .polaris { width: 88%; height: 88%; }
+.ware > div { min-width: 0; }
+.ware h3 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: clamp(12px, 3.5cqw, 14px); }
+.ware p, .card .ware p { margin: 2px 0 0; font-size: clamp(11px, 3cqw, 12px); line-height: 1.4; max-width: none; }
+.ware .price { color: #dfe6f0; font-size: clamp(11px, 3cqw, 12px); }
+.ware button { padding: 8px clamp(8px, 2.6cqw, 12px); font-size: clamp(11px, 3cqw, 12px); min-width: 6.5em; }
+.ware button:disabled { opacity: 0.45; cursor: default; filter: none; }
+.ware.on { border-color: var(--glow); }
+.ware button.poor { opacity: 0.6; }
+
+#errbar { position: fixed; left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom, 0px)); z-index: 100; padding: 10px 12px; border-radius: 6px; background: #3a0f1a; border: 1px solid var(--danger); color: #ffd2d8; font-size: 13px; line-height: 1.4; -webkit-user-select: text; user-select: text; }
+.nojs { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; padding: 32px; text-align: center; background: var(--night); color: var(--ink); line-height: 1.5; }
+.nojs b { font-family: var(--font-display); font-size: 26px; color: var(--glow); }
+.nojs p { margin: 0; max-width: 34ch; color: var(--muted); }
+
+/* Older browsers (iOS 15 and earlier) don't know container units (cqw/cqh), which every size above uses.
+   Without this the play area can collapse to nothing, so size it from the screen instead. */
+@supports not (width: 1cqw) {
+  .frame {
+    width: min(calc(100vw - 16px), calc((100vh - 16px) * 0.6667));
+    height: min(calc(100vh - 16px), calc(min(calc(100vw - 16px), calc((100vh - 16px) * 0.6667)) * 2.2));
+  }
+  .hud { font-size: clamp(8px, 2.7vw, 13px); }
+  .card { padding: 24px; gap: 12px; }
+  .card .eyebrow { font-size: clamp(24px, 8vw, 40px); }
+  .card h2 { font-size: clamp(22px, 7vw, 36px); }
+  #card h2 { font-size: 12px; }
+  .card p, button { font-size: 13px; }
+  button { padding: 10px 18px; }
+  .row { gap: 10px; }
+  .shophead canvas { width: 96px; }
+  .ware canvas, .ware .ico { width: 40px; }
+}
+@keyframes pulse { 50% { box-shadow: 0 0 0 5px rgba(255,200,97,0.3); } }
+@media (prefers-reduced-motion: reduce) { .meter.hl { animation: none; } }
+</style>
+</head>
+<body>
+<noscript>
+  <div class="nojs">
+    <b>Lantern Moth</b>
+    <p>This page is being shown as a preview, where games can't run. Previews from the Files app, Mail or message attachments block scripts.</p>
+    <p>Open it from a web link in Safari or Chrome instead.</p>
+  </div>
+</noscript>
+<div class="stage">
+  <div class="frame" id="frame">
+    <canvas id="c" width="400" height="600" aria-label="Lantern Moth game field"></canvas>
+    <div class="hud" id="hud" aria-live="off">
+      <div class="hrow">
+        <div class="hs sc"><span class="lbl">Lumens</span><b id="score">0</b><small class="best">Best <span id="best">0</span></small></div>
+        <div class="hs lv">
+          <span class="lbl">Level<b id="level">1</b></span>
+          <div class="lprog" title="Lanterns caught this level"><div class="mini"><i id="lantfill"></i></div><small id="lant">0/4</small><span class="sr"> lanterns</span></div>
+        </div>
+        <div class="chips">
+          <span class="chip" title="Rebirths"><i class="ico-reb"><svg class="polaris" viewBox="-12 -12 24 24" aria-hidden="true"><circle r="7.5" fill="#fff2cf" opacity="0.16"/><path d="M0-6L1.2-1.2 6 0 1.2 1.2 0 6-1.2 1.2-6 0-1.2-1.2Z" transform="rotate(45)" fill="#a9c8ff"/><circle r="4.1" fill="none" stroke="#fff6dc" stroke-width="0.6" opacity="0.7"/><path d="M0-11.8L1.5-1.5 8 0 1.5 1.5 0 11.8-1.5 1.5-8 0-1.5-1.5Z" fill="#fff6dc"/><path d="M0-11.8L1.5-1.5 0 0Z M8 0L1.5 1.5 0 0Z M0 11.8L-1.5 1.5 0 0Z M-8 0L-1.5-1.5 0 0Z" fill="#e9c98a"/><circle r="1.6" fill="#ffffff"/></svg></i><span class="sr">Rebirths</span><b id="lives">0</b></span>
+          <span class="chip" title="Coins"><i class="ico-coin" aria-hidden="true"></i><span class="sr">Coins</span><b id="coins">0</b></span>
+        </div>
+        <div class="hbtns">
+          <button class="ib" id="pause" type="button" aria-label="Pause" title="Pause (P)" aria-pressed="false" disabled>
+            <svg class="main-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg>
+            <svg class="alt-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" fill="currentColor"/></svg>
+          </button>
+          <button class="ib" id="fs" type="button" aria-label="Fullscreen" title="Fullscreen (F)" aria-pressed="false">
+            <svg class="main-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>
+            <svg class="alt-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="meter" id="meter" role="meter" aria-label="Glow" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="meterfill"></i></div>
+    </div>
+    <div class="card" id="card">
+      <p class="eyebrow">Lantern Moth <span class="ver">- v2.40</span></p>
+      <h2 id="ctitle">Keep the glow alive</h2>
+      <p id="cbody">Fly into lanterns to refill your light and dodge the spiders. Catch enough lanterns to level up. Every tenth level earns a rebirth, a second chance when your glow goes out.</p>
+      <p class="keys" id="ckeys">Arrow keys or A / D to steer. On a touch screen, drag. P or Esc pauses. New here? Try the tutorial.</p>
+      <div class="row">
+        <button id="go" type="button">Start flying</button>
+        <button id="tut" class="alt" type="button">Tutorial</button>
+      </div>
+      <div class="row" id="nameRow" hidden>
+        <input id="nameIn" type="text" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="NAME" aria-label="Your name, up to three characters">
+        <button id="nameSave" type="button">Save run</button>
+      </div>
+      <div class="row">
+        <button id="shopBtn" class="ghost" type="button">Shop</button>
+        <button id="boardBtn" class="ghost" type="button">Leaderboard</button>
+        <button id="opt" class="ghost" type="button">Options</button>
+        <button id="restart" class="ghost" type="button" hidden>Start over</button>
+        <button id="menu" class="ghost" type="button" hidden>Main menu</button>
+      </div>
+    </div>
+    <div class="card opts" id="opts" hidden>
+      <h2>Options</h2>
+      <button id="mute" class="alt" type="button" aria-pressed="false">Sound: on</button>
+      <div class="slider">
+        <label for="volSfx">Sound effects <output id="outSfx">100%</output></label>
+        <input id="volSfx" type="range" min="0" max="100" step="1" value="100">
+      </div>
+      <div class="slider">
+        <label for="volMus">Music <output id="outMus">80%</output></label>
+        <input id="volMus" type="range" min="0" max="100" step="1" value="80">
+      </div>
+      <p class="keys" id="optHint" hidden>Sound is off. Turn it back on to hear the sliders.</p>
+      <button id="optBack" type="button">Back</button>
+    </div>
+    <div class="card opts" id="dev" hidden>
+      <h2>Welcome developer Keranto!</h2>
+      <p class="big">Where are you flying in today?</p>
+      <div class="row">
+        <button class="alt" type="button" data-lv="10">Level 10</button>
+        <button class="alt" type="button" data-lv="15">Level 15</button>
+        <button class="alt" type="button" data-lv="20">Level 20</button>
+        <button class="alt" type="button" data-lv="25">Level 25</button>
+        <button class="alt" type="button" data-lv="35">Level 35</button>
+      </div>
+      <button id="devCoins" class="ghost" type="button">+100 coins (testing)</button>
+      <button id="devBack" class="ghost" type="button">Keep flying</button>
+    </div>
+    <div class="card opts shop" id="shop" hidden>
+      <div class="shophead">
+        <canvas id="shopLumi" width="300" height="300" aria-hidden="true"></canvas>
+        <div>
+          <h2>Lumi's Stall</h2>
+          <p class="coinline">Your coins: <b id="shopCoins">0</b></p>
+        </div>
+      </div>
+      <p class="lumisay" id="shopSay"></p>
+      <div class="wares" id="wares"></div>
+      <button id="shopBack" type="button">Back</button>
+    </div>
+    <div class="card opts" id="board" hidden>
+      <h2>Leaderboard</h2>
+      <ol class="lb" id="lbList"></ol>
+      <button id="boardBack" type="button">Back</button>
+    </div>
+    <div class="fairy" id="fairy" hidden>
+      <div class="ftext">
+        <b>Lumi, the Light Fairy</b>
+        <p id="fsay"></p>
+        <div class="frow">
+          <button id="fnext" type="button">Next</button>
+          <button id="fskip" class="ghost" type="button">Skip tutorial</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // The world is always 400 wide. H grows on tall screens (600 to 880). MY is the moth's flying line, always 100 above the
+  // bottom. VS scales every falling speed so the time from the top of the sky to the moth is the same on every screen.
+  var W = 400, H = 600, H_MIN = 600, H_MAX = 880, MY = 500, VS = 1;
+  var cv = document.getElementById("c");
+  var ctx = cv.getContext("2d");
+  var elScore = document.getElementById("score");
+  var elLevel = document.getElementById("level");
+  var elLant = document.getElementById("lant");
+  var elLives = document.getElementById("lives");
+  var elBest = document.getElementById("best");
+  var elCoins = document.getElementById("coins");
+  var elMeter = document.getElementById("meter");
+  var elLantFill = document.getElementById("lantfill");
+  var elFrame = document.getElementById("frame");
+  var elHud = document.getElementById("hud");
+  var elFs = document.getElementById("fs");
+  function fmt(n) { return Math.floor(n).toLocaleString("en-US"); }
+  var elFill = document.getElementById("meterfill");
+  var card = document.getElementById("card");
+  var cTitle = document.getElementById("ctitle");
+  var cBody = document.getElementById("cbody");
+  var cKeys = document.getElementById("ckeys");
+  var goBtn = document.getElementById("go");
+  var elPause = document.getElementById("pause");
+  var elRestart = document.getElementById("restart");
+  var elTut = document.getElementById("tut");
+  var elOpt = document.getElementById("opt");
+  var elMenu = document.getElementById("menu");
+  var elNameRow = document.getElementById("nameRow");
+  var elName = document.getElementById("nameIn");
+  var elNameSave = document.getElementById("nameSave");
+  var elBoardBtn = document.getElementById("boardBtn");
+  var elBoard = document.getElementById("board");
+  var elBoardBack = document.getElementById("boardBack");
+  var elLb = document.getElementById("lbList");
+  var elDev = document.getElementById("dev");
+  var elShop = document.getElementById("shop");
+  var elShopBtn = document.getElementById("shopBtn");
+  var elShopBack = document.getElementById("shopBack");
+  var elShopSay = document.getElementById("shopSay");
+  var elShopCoins = document.getElementById("shopCoins");
+  var elWares = document.getElementById("wares");
+  var elShopLumi = document.getElementById("shopLumi");
+  var elDevCoins = document.getElementById("devCoins");
+  var elDevBack = document.getElementById("devBack");
+  var opts = document.getElementById("opts");
+  var elBack = document.getElementById("optBack");
+  var elHint = document.getElementById("optHint");
+  var volSfx = document.getElementById("volSfx");
+  var volMus = document.getElementById("volMus");
+  var outSfx = document.getElementById("outSfx");
+  var outMus = document.getElementById("outMus");
+  var elFairy = document.getElementById("fairy");
+  var elSay = document.getElementById("fsay");
+  var elNext = document.getElementById("fnext");
+  var elSkip = document.getElementById("fskip");
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // shining coins: a rare drop from level 10, kept across runs for a future shop
+  var VERSION = "2.40";
+  Array.prototype.forEach.call(document.querySelectorAll(".ver"), function (el) { el.textContent = "- v" + VERSION; });
+  var coins = 0;
+  try { coins = parseInt(localStorage.getItem("lantern-moth-coins") || "0", 10) || 0; } catch (e) {}
+  function saveCoins() { try { localStorage.setItem("lantern-moth-coins", String(coins)); } catch (e) {} }
+
+  var best = 0;
+  try { best = parseInt(localStorage.getItem("lantern-moth-best-v2") || "0", 10) || 0; } catch (e) {}
+  elBest.textContent = fmt(best);
+  elCoins.textContent = coins;
+
+  var stars = [];
+  for (var i = 0; i < 100; i++) stars.push({ x: Math.random() * W, f: Math.random(), r: Math.random() * 1.2 + 0.3, p: Math.random() * 6.28 });
+
+  var keys = { l: false, r: false };
+  var state = "ready";
+  var G = null;
+  var last = 0;
+
+  // ---- sound (WebAudio, started from a click so browsers allow it) ----
+  var AC = null, muted = false, negAudio = false;
+  var elMute = document.getElementById("mute");
+  try { muted = localStorage.getItem("lantern-moth-mute") === "1"; } catch (e) {}
+  function syncMute() {
+    elMute.textContent = muted ? "Sound: off" : "Sound: on";
+    elMute.setAttribute("aria-pressed", muted ? "true" : "false");
+  }
+  syncMute();
+  function audioInit() {
+    if (!AC) {
+      try { var C = window.AudioContext || window.webkitAudioContext; if (C) AC = new C(); } catch (e) {}
+    }
+    if (AC && AC.state === "suspended") { try { AC.resume(); } catch (e) {} }
+  }
+  // ---- master mix: every sound passes through here. As the glow drops, volume falls, tone muffles and reverb grows ----
+  // player volume settings: effects and music each get their own slider (0 to 1), remembered between visits
+  var vol = { sfx: 1, mus: 0.8 };
+  try {
+    var sv = JSON.parse(localStorage.getItem("lantern-moth-vol") || "null");
+    if (sv && typeof sv.sfx === "number") vol.sfx = Math.max(0, Math.min(1, sv.sfx));
+    if (sv && typeof sv.mus === "number") vol.mus = Math.max(0, Math.min(1, sv.mus));
+  } catch (e) {}
+  function saveVol() { try { localStorage.setItem("lantern-moth-vol", JSON.stringify(vol)); } catch (e) {} }
+  function applyVol() {
+    if (!AC || !mix) return;
+    var t = AC.currentTime;
+    mix.sfx.gain.setTargetAtTime(vol.sfx * vol.sfx, t, 0.04);
+    mix.mus.gain.setTargetAtTime(vol.mus * vol.mus, t, 0.04);
+  }
+  var mix = null, mixLast = -1;
+  function mixIn() {
+    if (!mix) {
+      var inp = AC.createGain(), dry = AC.createGain(), wet = AC.createGain(), out = AC.createGain();
+      var lp = AC.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 16000; lp.Q.value = 0.5;
+      var rv = AC.createConvolver();
+      var len = Math.floor(AC.sampleRate * 2.8), buf = AC.createBuffer(2, len, AC.sampleRate);
+      for (var ch = 0; ch < 2; ch++) {
+        var data = buf.getChannelData(ch);
+        for (var i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
+      }
+      rv.buffer = buf;
+      wet.gain.value = 0.08;
+      inp.connect(dry); dry.connect(lp);
+      inp.connect(rv); rv.connect(wet); wet.connect(lp);
+      lp.connect(out); out.connect(AC.destination);
+      var sfx = AC.createGain(), mus = AC.createGain();
+      sfx.gain.value = vol.sfx * vol.sfx;
+      mus.gain.value = vol.mus * vol.mus;
+      sfx.connect(inp); mus.connect(inp);
+      mix = { inp: inp, dry: dry, wet: wet, lp: lp, out: out, sfx: sfx, mus: mus };
+    }
+    return mix.inp;
+  }
+  function sfxIn() { mixIn(); return mix.sfx; }
+  function musIn() { mixIn(); return mix.mus; }
+  function mixSet(hl) {
+    if (!AC || !mix) return;
+    if (Math.abs(hl - mixLast) < 0.5) return;
+    mixLast = hl;
+    var lf = Math.max(0, Math.min(1, (55 - hl) / 55));
+    lf = lf * lf * (3 - 2 * lf);
+    var t = AC.currentTime;
+    mix.out.gain.setTargetAtTime(1 - 0.8 * lf, t, 0.2);
+    mix.dry.gain.setTargetAtTime(1 - 0.5 * lf, t, 0.2);
+    mix.wet.gain.setTargetAtTime(0.08 + 1.1 * lf, t, 0.2);
+    mix.lp.frequency.setTargetAtTime(16000 * Math.pow(1200 / 16000, lf), t, 0.2);
+  }
+
+  // Negative dimension voice: an octave down, a detuned minor second against it, slow swell, wobble, dull and long.
+  function toneNeg(f, d, v, to, t) {
+    var f0 = Math.max(f * 0.5, 36), f1 = to ? Math.max(to * 0.5, 30) : 0, dur = d * 1.5;
+    var g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime((v || 0.12) * 0.9, t + Math.min(0.12, dur * 0.3));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    var lp = AC.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1100; lp.Q.value = 2;
+    g.connect(lp); lp.connect(sfxIn());
+    var lfo = AC.createOscillator(), lg = AC.createGain();
+    lfo.frequency.value = 5.5; lg.gain.value = f0 * 0.02;
+    lfo.connect(lg);
+    [[f0, "triangle", 1], [f0 * 1.0595, "sawtooth", 0.35]].forEach(function (p) {
+      var o = AC.createOscillator(), og = AC.createGain();
+      o.type = p[1];
+      o.frequency.setValueAtTime(p[0], t);
+      if (f1) o.frequency.exponentialRampToValueAtTime(p[0] * f1 / f0, t + dur);
+      lg.connect(o.frequency);
+      og.gain.value = p[2];
+      o.connect(og); og.connect(g);
+      o.start(t); o.stop(t + dur + 0.05);
+    });
+    lfo.start(t); lfo.stop(t + dur + 0.05);
+  }
+  // a short breath of filtered noise, used for the negative dimension's whispers
+  var noiseBuf = null;
+  function breath(d, vol, f) {
+    if (!AC || muted) return;
+    if (!noiseBuf) {
+      noiseBuf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+      var nd = noiseBuf.getChannelData(0);
+      for (var i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    }
+    var t = AC.currentTime, s = AC.createBufferSource();
+    s.buffer = noiseBuf; s.loop = true;
+    var bp = AC.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 5;
+    bp.frequency.setValueAtTime(f || 1400, t);
+    bp.frequency.exponentialRampToValueAtTime((f || 1400) * 0.5, t + d);
+    var g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + d * 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    s.connect(bp); bp.connect(g); g.connect(sfxIn());
+    s.start(t); s.stop(t + d + 0.05);
+  }
+
+  function tone(f, d, type, v, to, delay) {
+    if (!AC || muted) return;
+    var t = AC.currentTime + (delay || 0);
+    if (negAudio) { toneNeg(f, d, v, to, t); return; }
+    var o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || "sine";
+    o.frequency.setValueAtTime(f, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + d);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(v || 0.12, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g); g.connect(sfxIn());
+    o.start(t); o.stop(t + d + 0.02);
+  }
+  var STEPS = [0, 2, 4, 7, 9];
+  function sfxCollect(streak) {
+    var n = Math.min(streak - 1, 14);
+    var semis = STEPS[n % 5] + 12 * Math.floor(n / 5);
+    var f = 261.63 * Math.pow(2, semis / 12);
+    if (negAudio) {
+      // negative dimension: a sinking, wavering note and a faint breath instead of a bright chime
+      tone(f, 0.45, "sine", 0.12, f * 0.7);
+      breath(0.35, 0.05, 2200);
+      return;
+    }
+    tone(f, 0.2, "triangle", 0.14);
+    if (f < 1000) tone(f * 2, 0.14, "sine", 0.05, null, 0.04);
+  }
+  function sfxHit() { tone(220, 0.32, "sawtooth", 0.13, 70); tone(90, 0.25, "square", 0.06, 50); if (negAudio) breath(0.45, 0.1, 1000); }
+  function sfxMiss() { tone(180, 0.16, "sine", 0.06, 120); }
+  function sfxStart() { tone(392, 0.1, "triangle", 0.1); tone(587, 0.16, "triangle", 0.1, null, 0.09); }
+  function sfxLevel() { [523.25, 659.25, 783.99, 1046.5].forEach(function (f, i) { tone(f, 0.22, "triangle", 0.12, null, i * 0.08); }); if (negAudio) breath(0.7, 0.07, 1600); }
+  function sfxLife() { tone(1318.5, 0.6, "sine", 0.08, null, 0.35); tone(1568, 0.8, "sine", 0.07, null, 0.45); }
+  function sfxGather() {
+    tone(130, 1.9, "sine", 0.1, 520);
+    tone(260, 1.9, "triangle", 0.05, 1040);
+    tone(392, 1.6, "sine", 0.04, 1568, 0.2);
+  }
+  function sfxRebirth() {
+    [392, 523.25, 659.25, 783.99, 1046.5, 1318.5].forEach(function (f, i) { tone(f, 0.6, "sine", 0.09, null, i * 0.07); });
+    tone(196, 1.3, "triangle", 0.1);
+  }
+  function sfxOver() { [392, 330, 262, 196].forEach(function (f, i) { tone(f, 0.32, "triangle", 0.12, f * 0.97, i * 0.18); }); if (negAudio) breath(1.2, 0.09, 900); }
+  // ---- ambient music: slow pads and sparse bells through an echo, muffled as the glow fades ----
+  var bgm = { run: false, i: 0, master: null, filter: null, bus: null };
+  var CHORDS = [
+    [110, 164.81, 196, 246.94, 261.63],
+    [87.31, 130.81, 164.81, 220, 261.63],
+    [130.81, 196, 246.94, 329.63],
+    [98, 146.83, 220, 293.66]
+  ];
+  var BELLS = [440, 523.25, 587.33, 659.25, 783.99, 880, 1046.5];
+  // negative dimension: clustered, tritone-heavy drones and low tolling bells
+  var NCHORDS = [
+    [55, 58.27, 82.41, 123.47],
+    [49, 69.3, 98, 116.54],
+    [61.74, 65.41, 92.5, 130.81],
+    [51.91, 77.78, 87.31, 103.83]
+  ];
+  var NBELLS = [196, 207.65, 233.08, 277.18, 311.13];
+  function bgmInit() {
+    if (!AC || bgm.master) return;
+    var m = AC.createGain(); m.gain.value = 0;
+    var f = AC.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 1400; f.Q.value = 0.4;
+    var bus = AC.createGain();
+    var dl = AC.createDelay(1.5); dl.delayTime.value = 0.62;
+    var fb = AC.createGain(); fb.gain.value = 0.5;
+    var wet = AC.createGain(); wet.gain.value = 0.45;
+    bus.connect(f); f.connect(m);
+    f.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(m);
+    m.connect(musIn());
+    bgm.master = m; bgm.filter = f; bgm.bus = bus;
+  }
+  function pad(freq, t, dur, vol) {
+    var g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + dur * 0.35);
+    g.gain.linearRampToValueAtTime(0.0001, t + dur);
+    g.connect(bgm.bus);
+    [["sine", 1, 1], ["triangle", 1.003, 0.4]].forEach(function (p) {
+      var o = AC.createOscillator(), og = AC.createGain();
+      o.type = p[0]; o.frequency.value = freq * p[1]; og.gain.value = p[2];
+      o.connect(og); og.connect(g);
+      o.start(t); o.stop(t + dur + 0.05);
+    });
+  }
+  function bell(freq, t, vol) {
+    var g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 3.2);
+    g.connect(bgm.bus);
+    [[1, 1], [2.01, 0.25]].forEach(function (p) {
+      var o = AC.createOscillator(), og = AC.createGain();
+      o.type = "sine"; o.frequency.value = freq * p[0]; og.gain.value = p[1];
+      o.connect(og); og.connect(g);
+      o.start(t); o.stop(t + 3.3);
+    });
+  }
+  function bellNeg(freq, t, vol) {
+    var g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 4.8);
+    g.connect(bgm.bus);
+    [[1, 1], [1.414, 0.3]].forEach(function (p) {
+      var o = AC.createOscillator(), og = AC.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(freq * p[0], t);
+      o.frequency.exponentialRampToValueAtTime(freq * p[0] * 0.96, t + 4.8);
+      og.gain.value = p[1];
+      o.connect(og); og.connect(g);
+      o.start(t); o.stop(t + 4.9);
+    });
+  }
+  function bgmChord() {
+    if (!bgm.run) return;
+    if (AC.state === "running") {
+      var set = negAudio ? NCHORDS : CHORDS;
+      var ch = set[bgm.i % set.length], t = AC.currentTime + 0.05;
+      bgm.i++;
+      ch.forEach(function (f) {
+        pad(f, t, 10, 0.03);
+        if (negAudio) pad(f * 2, t, 10, 0.012);
+      });
+    }
+    setTimeout(bgmChord, 8000);
+  }
+  function bgmBell() {
+    if (!bgm.run) return;
+    if (AC.state === "running") {
+      if (negAudio) {
+        bellNeg(NBELLS[Math.floor(Math.random() * NBELLS.length)], AC.currentTime + 0.05, 0.04);
+        if (Math.random() < 0.4) breath(1.6, 0.035, 1200);
+      } else {
+        bell(BELLS[Math.floor(Math.random() * BELLS.length)], AC.currentTime + 0.05, 0.035);
+      }
+    }
+    setTimeout(bgmBell, negAudio ? 3200 + Math.random() * 5200 : 1800 + Math.random() * 3200);
+  }
+  function bgmApply() {
+    if (AC && bgm.master) bgm.master.gain.setTargetAtTime(muted || bgm.duck ? 0 : 0.9, AC.currentTime, 0.6);
+  }
+  // The Weaver's theme: a driving, tense bass-and-arpeggio loop. It fades out through his last 3 seconds,
+  // then the calm soundtrack swells back over 2 seconds once the sky returns to normal.
+  var bm = { on: false, fade: false, gain: null, timer: 0, next: 0, step: 0, noise: null };
+  var BCH = [
+    { b: 55, a: [220, 261.63, 329.63] },
+    { b: 43.65, a: [174.61, 220, 261.63] },
+    { b: 49, a: [196, 246.94, 293.66] },
+    { b: 41.2, a: [164.81, 207.65, 246.94] }
+  ];
+  var BARP = [0, 1, 2, 1, 0, 1, 2, 2];
+  function bossInit() {
+    if (!AC || bm.gain) return;
+    var g = AC.createGain(); g.gain.value = 0.0001;
+    var f = AC.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 3200; f.Q.value = 0.7;
+    g.connect(f); f.connect(musIn());
+    bm.gain = g;
+    var len = Math.floor(AC.sampleRate * 0.12), buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    bm.noise = buf;
+    var ll = Math.floor(AC.sampleRate * 2.6), lb = AC.createBuffer(1, ll, AC.sampleRate), ld = lb.getChannelData(0);
+    for (var j = 0; j < ll; j++) ld[j] = Math.random() * 2 - 1;
+    bm.long = lb;
+  }
+  function bossNote(freq, type, vol, dur, t, lp) {
+    var o = AC.createOscillator(), g = AC.createGain(), f = AC.createBiquadFilter();
+    o.type = type; o.frequency.value = freq;
+    f.type = "lowpass"; f.frequency.value = lp || 1400;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(f); f.connect(g); g.connect(bm.gain);
+    o.start(t); o.stop(t + dur + 0.03);
+  }
+  function bossStep1(n, t) {
+    var bar = Math.floor(n / 8) % 4, k = n % 8, ch = BCH[bar];
+    var shift = negAudio ? 0.89 : 1;
+    bossNote(ch.b * shift * (k % 2 ? 2 : 1), "sawtooth", 0.075, 0.2, t, 520);
+    if (k % 2 === 0) {
+      var kk = AC.createOscillator(), kg = AC.createGain();
+      kk.type = "sine"; kk.frequency.setValueAtTime(130, t); kk.frequency.exponentialRampToValueAtTime(42, t + 0.16);
+      kg.gain.setValueAtTime(0.16, t); kg.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      kk.connect(kg); kg.connect(bm.gain); kk.start(t); kk.stop(t + 0.22);
+    }
+    if (k % 2 === 1 && bm.noise) {
+      var ns = AC.createBufferSource(), nf = AC.createBiquadFilter(), ng = AC.createGain();
+      ns.buffer = bm.noise; nf.type = "highpass"; nf.frequency.value = 5500;
+      ng.gain.value = 0.045;
+      ns.connect(nf); nf.connect(ng); ng.connect(bm.gain); ns.start(t);
+    }
+    bossNote(ch.a[BARP[k]] * shift * ((k === 3 || k === 7) ? 2 : 1), "triangle", 0.04, 0.2, t, 2600);
+    if (k === 0) bossNote(ch.a[0] * shift, "sawtooth", 0.02, 1.6, t, 700);
+  }
+  // v2: slower and heavier. Sub drone, distorted syncopated bass, hard kicks and snare, clashing stabs, a tolling bell and a rising riser every fourth bar.
+  var BOSS_THEME = 2; // set to 1 to bring back the original, lighter Weaver theme
+  var BR2 = [36.71, 38.89, 32.7, 34.65];
+  var BP2 = [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0];
+  var distCurve = null;
+  function bossDist() {
+    if (!distCurve) { distCurve = new Float32Array(257); for (var i = 0; i < 257; i++) { var x = i / 128 - 1; distCurve[i] = Math.tanh(x * 3.2); } }
+    return distCurve;
+  }
+  function bossGrowl(freq, t, dur, vol) {
+    var o = AC.createOscillator(), o2 = AC.createOscillator(), g = AC.createGain(), f = AC.createBiquadFilter(), ws = AC.createWaveShaper();
+    o.type = "sawtooth"; o2.type = "square"; o.frequency.value = freq; o2.frequency.value = freq * 1.007;
+    ws.curve = bossDist();
+    f.type = "lowpass"; f.frequency.setValueAtTime(900, t); f.frequency.exponentialRampToValueAtTime(260, t + dur); f.Q.value = 4;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(ws); o2.connect(ws); ws.connect(f); f.connect(g); g.connect(bm.gain);
+    o.start(t); o2.start(t); o.stop(t + dur + 0.03); o2.stop(t + dur + 0.03);
+  }
+  function bossStep2(n, t) {
+    var bar = Math.floor(n / 16), k = n % 16, root = BR2[bar % 4] * (negAudio ? 0.89 : 1), i, nsrc;
+    if (k === 0) {
+      bossNote(root * 2, "sine", 0.13, 2.5, t, 200);
+      bossNote(root * 4.02, "sawtooth", 0.03, 2.5, t, 320);
+    }
+    if (BP2[k]) bossGrowl(root * (k === 14 ? 2 : 1), t, 0.26, 0.13);
+    if (k % 4 === 0) {
+      var kk = AC.createOscillator(), kg = AC.createGain();
+      kk.type = "sine"; kk.frequency.setValueAtTime(150, t); kk.frequency.exponentialRampToValueAtTime(34, t + 0.2);
+      kg.gain.setValueAtTime(k === 0 ? 0.3 : 0.22, t); kg.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+      kk.connect(kg); kg.connect(bm.gain); kk.start(t); kk.stop(t + 0.3);
+    }
+    if ((k === 4 || k === 12) && bm.noise) {
+      nsrc = AC.createBufferSource(); var nf = AC.createBiquadFilter(), ng = AC.createGain();
+      nsrc.buffer = bm.noise; nf.type = "bandpass"; nf.frequency.value = 1700; nf.Q.value = 0.8; ng.gain.value = 0.11;
+      nsrc.connect(nf); nf.connect(ng); ng.connect(bm.gain); nsrc.start(t);
+      bossNote(190, "triangle", 0.06, 0.12, t, 900);
+    }
+    if (k % 2 === 1 && bm.noise) {
+      nsrc = AC.createBufferSource(); var hf = AC.createBiquadFilter(), hg = AC.createGain();
+      nsrc.buffer = bm.noise; hf.type = "highpass"; hf.frequency.value = 7000; hg.gain.value = 0.02;
+      nsrc.connect(hf); hf.connect(hg); hg.connect(bm.gain); nsrc.start(t);
+    }
+    if (k === 0 && bar % 2 === 1) {
+      // a dissonant stab: minor second and tritone clashing above the bass
+      [root * 4, root * 4 * 1.0595, root * 4 * 1.4142, root * 8 * 1.0595].forEach(function (f0) { bossNote(f0, "sawtooth", 0.028, 1.1, t, 1300); });
+    }
+    if (k === 8 && bar % 2 === 0) {
+      bossNote(root * 3, "sine", 0.1, 2.2, t, 1200);
+      bossNote(root * 3 * 2.76, "sine", 0.035, 1.6, t, 3000);
+    }
+    if (k === 6 || k === 14) bossNote((bar % 2 ? 622.25 : 587.33) * (negAudio ? 0.89 : 1), "triangle", 0.022, 0.14, t, 3200);
+    if (bar % 4 === 3 && k === 0 && bm.long) {
+      nsrc = AC.createBufferSource(); var rf = AC.createBiquadFilter(), rg = AC.createGain();
+      nsrc.buffer = bm.long; rf.type = "bandpass"; rf.Q.value = 1.2;
+      rf.frequency.setValueAtTime(250, t); rf.frequency.exponentialRampToValueAtTime(4200, t + 2.5);
+      rg.gain.setValueAtTime(0.0001, t); rg.gain.linearRampToValueAtTime(0.09, t + 2.3); rg.gain.linearRampToValueAtTime(0.0001, t + 2.55);
+      nsrc.connect(rf); rf.connect(rg); rg.connect(bm.gain); nsrc.start(t);
+    }
+  }
+  function bossStep(n, t) { if (BOSS_THEME === 1) bossStep1(n, t); else bossStep2(n, t); }
+  function bossSched() {
+    if (!bm.on) return;
+    if (AC && AC.state === "running" && !muted) {
+      if (bm.next < AC.currentTime) bm.next = AC.currentTime + 0.05;
+      var dur = BOSS_THEME === 1 ? 0.214 : 0.16;
+      while (bm.next < AC.currentTime + 0.35) { bossStep(bm.step++, bm.next); bm.next += dur; }
+    }
+    bm.timer = setTimeout(bossSched, 90);
+  }
+  function bossMusic(active, remain) {
+    if (!AC) return;
+    var t = AC.currentTime, cur;
+    if (active && !bm.on) {
+      bossInit();
+      bm.on = true; bm.fade = false; bm.step = 0; bm.next = t + 0.05;
+      cur = bm.gain.gain.value;
+      bm.gain.gain.cancelScheduledValues(t);
+      bm.gain.gain.setValueAtTime(Math.max(cur, 0.0001), t);
+      bm.gain.gain.linearRampToValueAtTime(1, t + 0.8);
+      bgm.duck = true;
+      if (bgm.master) { cur = bgm.master.gain.value; bgm.master.gain.cancelScheduledValues(t); bgm.master.gain.setValueAtTime(cur, t); bgm.master.gain.linearRampToValueAtTime(0, t + 0.8); }
+      clearTimeout(bm.timer); bossSched();
+    }
+    if (active && bm.on && remain <= 3 && !bm.fade) {
+      bm.fade = true;
+      cur = bm.gain.gain.value;
+      bm.gain.gain.cancelScheduledValues(t);
+      bm.gain.gain.setValueAtTime(Math.max(cur, 0.0001), t);
+      bm.gain.gain.linearRampToValueAtTime(0.0001, t + Math.max(0.2, remain));
+    }
+    if (!active && bm.on) {
+      bm.on = false; bm.fade = false;
+      clearTimeout(bm.timer);
+      cur = bm.gain.gain.value;
+      bm.gain.gain.cancelScheduledValues(t);
+      bm.gain.gain.setValueAtTime(Math.max(cur, 0.0001), t);
+      bm.gain.gain.linearRampToValueAtTime(0.0001, t + 0.3);
+      bgm.duck = false;
+      if (bgm.master) {
+        cur = bgm.master.gain.value;
+        bgm.master.gain.cancelScheduledValues(t);
+        bgm.master.gain.setValueAtTime(cur, t);
+        bgm.master.gain.linearRampToValueAtTime(muted ? 0 : 0.9, t + 2);
+      }
+    }
+  }
+  function bgmStart() {
+    if (!AC) return;
+    bgmInit();
+    if (!bgm.run) {
+      bgm.run = true;
+      bgmChord();
+      setTimeout(bgmBell, 2500);
+    }
+    bgmApply();
+  }
+  document.addEventListener("visibilitychange", function () {
+    // leaving the tab pauses a run in progress, so nothing is lost while you are away
+    if (document.hidden && state === "play") pauseGame();
+    if (!AC) return;
+    try { if (document.hidden) AC.suspend(); else if (state !== "paused") AC.resume(); } catch (e) {}
+  });
+
+  elMute.addEventListener("click", function () {
+    muted = !muted;
+    try { localStorage.setItem("lantern-moth-mute", muted ? "1" : "0"); } catch (e) {}
+    syncMute();
+    elHint.hidden = !muted;
+    if (state !== "paused") { audioInit(); bgmStart(); }
+    bgmApply();
+    if (!muted && state !== "paused") tone(660, 0.08, "triangle", 0.08);
+    elMute.blur();
+  });
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  // lanterns needed to clear a level: 4, 6, 8, 10 ...
+  function need(level) { return 4 + (level - 1) * 2; }
+
+  // Difficulty keeps climbing until level 100, then holds. Each level up to 15 adds 0.15x speed (as before);
+  // from 16 to 100 each level adds 0.05x, so the climb stays playable. Speed is 1.0x at level 1, 3.1x at 15,
+  // 4.85x at 50 and 7.35x from level 100 on.
+  var MAXLV = 100;
+  function dstep(level) { var L = Math.min(level, MAXLV); return L <= 15 ? L - 1 : 14 + (L - 15) / 3; }
+  function speedMul(level) { return 1 + 0.15 * dstep(level); }
+  // hazards arrive at the old rate up to level 15, then more slowly than speed grows so the screen never becomes a wall
+  function hazRate(level) { var d = speedMul(level); return d <= 3.1 ? d : 3.1 + (d - 3.1) * 0.4; }
+  function glowDrain(level) { var s = dstep(level); return 7 + 0.8 * Math.min(s, 14) + 0.2 * Math.max(0, s - 14); }
+  function scrollSpeed(level) { return 10 + 3.2 * Math.min(level, 15) + 0.5 * Math.max(0, Math.min(level, MAXLV) - 15); }
+  // A spider's bite grows with its speed: roughly 20 to 30 at level 1, and from level 50 on even the slowest spider takes the full 100.
+  var SPIDER_V50 = 120 * speedMul(50);
+  // faster spiders hit harder: about 27 at the start, 60 at level-20 speed, capped at 80 from about level 50
+  function spiderDamage(vy) { return Math.min(80, 27 + Math.max(0, vy - 120) * 0.1157); }
+
+  var NEG_ON = "invert(1) hue-rotate(180deg) brightness(0.62)";
+  var NEG_OFF = "invert(0) hue-rotate(0deg) brightness(1)";
+  cv.style.filter = NEG_OFF;
+
+  // background: deeper stars scroll slower, soft clouds slower still
+  stars.forEach(function (s) { s.z = 0.25 + s.r * 0.7; });
+  var clouds = [];
+  for (var ci = 0; ci < 6; ci++) {
+    clouds.push({ x: rand(0, W), f: Math.random(), rx: rand(110, 200), ry: rand(40, 80), z: rand(0.12, 0.26), a: rand(0.06, 0.11), c: ci % 2 ? "110,130,255" : "170,110,230" });
+  }
+
+  // extra sound effects for the newer mechanics
+  function sfxSnap() { tone(2200, 0.06, "triangle", 0.035, 1100); }
+  function sfxBump() { tone(900, 0.06, "triangle", 0.04, 700); }
+  function sfxRedSpawn() { tone(70, 1.4, "sine", 0.14, 45); tone(105, 1.0, "triangle", 0.06, 70, 0.05); }
+  function sfxSD() { tone(55, 0.9, "sawtooth", 0.1, 38); tone(440, 0.4, "square", 0.04, 220); }
+  function sfxSurvive() { [392, 523.25, 659.25, 880].forEach(function (f, i) { tone(f, 0.3, "triangle", 0.11, null, i * 0.09); }); }
+  function sfxNegative() {
+    tone(660, 1.2, "sine", 0.1, 110);
+    tone(330, 1.2, "triangle", 0.06, 55);
+    tone(110, 1.0, "sine", 0.1, 440, 0.9);
+  }
+
+  function sfxDuck() { tone(110, 0.45, "sawtooth", 0.12, 55); tone(165, 0.3, "square", 0.05, 80); }
+  function sfxBonus() { tone(1318.5, 0.25, "triangle", 0.08, null, 0.05); tone(1760, 0.3, "sine", 0.06, null, 0.12); }
+
+  // Source colour that reads as (r, g, b) once the negative-dimension filter has run over the canvas.
+  function nsrc(r, g, b) {
+    var i1 = g - 0.574 * (r - g) - 0.144 * (b - g), i2 = i1 + r - g, i3 = i2 + b - g;
+    function c(v) { return Math.max(0, Math.min(255, Math.round(255 - v))); }
+    return [c(i1), c(i2), c(i3)];
+  }
+
+  // Skipping the red lantern costs half your current light.
+  function missRed() {
+    G.light = Math.max(1, G.light * 0.5);
+    G.shout = { t: 0, text: "Quit duckin' the fade!" };
+    G.shake = reduce ? 0 : 0.5;
+    sfxDuck();
+  }
+
+  function reset() {
+    G = { t: 0, score: 0, streak: 0, light: 100, mx: W / 2, tx: W / 2, inv: 0, shake: 0, level: 1, got: 0, banner: 0, lives: 0, flash: 0, bt: "", bs: "", rb: null, gather: [],
+      items: [], haz: [], parts: [], strands: [], spawnL: 0.4, spawnH: 2.2,
+      scroll: G ? G.scroll : 0, sd: null, hb: 0, redAt: 3 + Math.floor(rand(0, 2)), neg: false, touched: false,
+      shout: null, fl: null, msDone: 0, ev: null, stuck: 0, struggleT: 0, itsyLatch: false, bossLatch: false, webs: [], pops: [], bonusIn: 12 + Math.floor(rand(0, 11)), coinIn: 25 + Math.floor(rand(0, 21)), coinsRun: 0, lt: 0, itsyNext: 0, rate: 0, pscore: 0, mvx: 0, pstreak: 0, bossNext: 0, slimeNext: 0, bgs: [], evRest: 0, wins: { itsy: 0, boss: 0, slime: 0 }, tut: false };
+  }
+  reset();
+
+  function burst(x, y, color, n) {
+    for (var i = 0; i < n; i++) {
+      var a = Math.random() * 6.283, s = rand(40, 160);
+      G.parts.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.35, 0.7), max: 0.7, c: color });
+    }
+  }
+
+  function start() {
+    bossMusic(false, 0);
+    commitPending(elName.value);
+    reset();
+    G.sparked = false; G.lured = false;
+    // buffs bought from Lumi's stall are spent as the run begins
+    if (shop.spark > 0) { shop.spark--; G.sparked = true; G.lives += 1; }
+    if (shop.lure > 0) { shop.lure--; G.lured = true; }
+    if (G.sparked || G.lured) {
+      saveShop();
+      G.banner = 2.4;
+      G.bt = G.sparked && G.lured ? "LUMI'S GIFTS" : (G.sparked ? "REBIRTH SPARK" : "LUMI'S LURE");
+      G.bs = G.sparked && G.lured ? "+1 rebirth, and lanterns drift toward you." : (G.sparked ? "Lumi's gift glows within you. +1 rebirth." : "Lanterns near you will drift your way.");
+    }
+    cv.style.filter = NEG_OFF;
+    negAudio = false;
+    audioInit();
+    bgmStart();
+    sfxStart();
+    state = "play";
+    card.hidden = true;
+    elRestart.hidden = true;
+    T = null;
+    F = null;
+    elFairy.hidden = true;
+    elMeter.classList.remove("hl");
+    last = performance.now();
+    cv.focus && cv.focus();
+  }
+
+  // ---- Lumi's shop: coins buy a one-run buff, a moth skin and a lasting charm ----
+  // the North Star (Polaris): the rebirth mark, shared by the HUD and the shop's Rebirth Spark
+  var POLARIS_SVG = '<svg class="polaris" viewBox="-12 -12 24 24" aria-hidden="true"><circle r="7.5" fill="#fff2cf" opacity="0.16"/><path d="M0-6L1.2-1.2 6 0 1.2 1.2 0 6-1.2 1.2-6 0-1.2-1.2Z" transform="rotate(45)" fill="#a9c8ff"/><circle r="4.1" fill="none" stroke="#fff6dc" stroke-width="0.6" opacity="0.7"/><path d="M0-11.8L1.5-1.5 8 0 1.5 1.5 0 11.8-1.5 1.5-8 0-1.5-1.5Z" fill="#fff6dc"/><path d="M0-11.8L1.5-1.5 0 0Z M8 0L1.5 1.5 0 0Z M0 11.8L-1.5 1.5 0 0Z M-8 0L-1.5-1.5 0 0Z" fill="#e9c98a"/><circle r="1.6" fill="#ffffff"/></svg>';
+  var SHOP_KEY = "lantern-moth-shop";
+  var shop = { spark: 0, lure: 0, own: {}, wear: "" }, shopOpen = false, shopRaf = 0, shopT = 0;
+  try {
+    var sv = JSON.parse(localStorage.getItem(SHOP_KEY) || "{}");
+    shop.spark = Math.max(0, sv.spark | 0);
+    shop.own = sv.own && typeof sv.own === "object" ? sv.own : {};
+    if (sv.skin) shop.own.moon = true; // older saves only knew about Moonlit Wings
+    shop.wear = typeof sv.wear === "string" ? sv.wear : (sv.skinOn ? "moon" : "");
+    if (shop.own.hebrew) {
+      // v2.37: the Hebrew moth is now everyone's starting moth, so anyone who bought it gets their 100 coins back
+      delete shop.own.hebrew;
+      coins += 100; saveCoins(); elCoins.textContent = coins;
+      if (shop.wear === "hebrew") shop.wear = "";
+      saveShop(); // record the migration so the refund only ever happens once
+    }
+    if (shop.wear && !shop.own[shop.wear]) shop.wear = "";
+    shop.lure = typeof sv.lure === "number" ? Math.max(0, sv.lure | 0) : (sv.lure ? 1 : 0);
+  } catch (e) {}
+  function saveShop() { try { localStorage.setItem(SHOP_KEY, JSON.stringify(shop)); } catch (e) {} }
+  var WARES = [
+    { id: "spark", name: "Rebirth Spark", price: 40, svg: true, desc: "A bottled spark of Lumi's light. Your next run begins with one extra rebirth. Used up when you fly." },
+    { id: "lure", name: "Lumi's Lure", price: 50, ico: "\u2740", desc: "A charm for your next run only. Lanterns that drift close to you are gently drawn in. Red lanterns never are." },
+    { id: "moon", skin: true, name: "Moonlit Wings", price: 100, desc: "A silver-blue moth skin, spun from moonlight. Wear it or swap back any time.",
+      buySay: "Moonlit Wings, yours! Try them in the night sky.", wearSay: "Oh, you look lovely in moonlight!" },
+    { id: "poly", skin: true, name: "Polygrammate Wings", price: 100, desc: "Snow-white wings scribbled with black marks like lines of handwriting, from the Polygrammate moth. Wear it or swap back any time.",
+      buySay: "Polygrammate Wings, yours! Someone wrote a whole letter on them.", wearSay: "Crisp as fresh paper. You look wonderful!" }
+  ];
+  function withCtx(c, fn) { var sv0 = ctx; ctx = c; try { fn(); } finally { ctx = sv0; } }
+  function lumiSay(t) { elShopSay.textContent = t; }
+  function renderShop() {
+    elShopCoins.textContent = coins;
+    elWares.textContent = "";
+    WARES.forEach(function (w) {
+      var row = document.createElement("div"), left, mid = document.createElement("div"), btn = document.createElement("button");
+      row.className = "ware";
+      if (w.skin) {
+        left = document.createElement("canvas"); left.width = 88; left.height = 72;
+        withCtx(left.getContext("2d"), function () { ctx.save(); ctx.translate(44, 38); ctx.scale(1.15, 1.15); drawMoth(0, 0, 0, 0.3, w.id); ctx.restore(); });
+      } else {
+        left = document.createElement("div"); left.className = "ico"; left.style.color = "#ffd98a";
+        if (w.svg) left.innerHTML = POLARIS_SVG; else left.textContent = w.ico;
+      }
+      var h = document.createElement("h3"), p = document.createElement("p"), pr = document.createElement("span");
+      h.textContent = w.name; p.textContent = w.desc; pr.className = "price";
+      mid.appendChild(h); mid.appendChild(p); mid.appendChild(pr);
+      btn.type = "button";
+      var owned = w.skin ? !!shop.own[w.id] : (w.id === "spark" ? shop.spark : shop.lure);
+      if (!w.skin) pr.textContent = w.price + " coins  \u00b7  you hold " + owned;
+      else pr.textContent = owned ? "Owned" : w.price + " coins";
+      if (w.skin && owned) {
+        btn.textContent = shop.wear === w.id ? "Unequip" : "Equip";
+        btn.className = "alt";
+        if (shop.wear === w.id) row.classList.add("on");
+      } else {
+        btn.textContent = "Buy";
+        if (coins < w.price) btn.classList.add("poor");
+      }
+      btn.addEventListener("click", function () { shopAct(w); });
+      row.appendChild(left); row.appendChild(mid); row.appendChild(btn);
+      elWares.appendChild(row);
+    });
+  }
+  function shopAct(w) {
+    if (w.skin && shop.own[w.id]) {
+      shop.wear = shop.wear === w.id ? "" : w.id;
+      saveShop(); lumiSay(shop.wear ? w.wearSay : "Back to your own Hebrew wings."); renderShop(); return;
+    }
+    if (coins < w.price) { lumiSay("Hmm, you need " + (w.price - coins) + " more coins for that one."); sfxMiss(); return; }
+    coins -= w.price; saveCoins(); elCoins.textContent = coins;
+    if (w.id === "spark") { shop.spark++; lumiSay("Keep it safe! It will glow when you need it."); }
+    else if (w.skin) { shop.own[w.id] = true; shop.wear = w.id; lumiSay(w.buySay); }
+    else { shop.lure++; lumiSay("A Lure for your next flight. Lanterns will find you more kindly."); }
+    saveShop(); sfxCoin(); renderShop();
+  }
+  function shopTick() {
+    if (!shopOpen) return;
+    shopT += 0.016;
+    var c = elShopLumi.getContext("2d");
+    c.clearRect(0, 0, 300, 300);
+    withCtx(c, function () {
+      ctx.save(); ctx.scale(3, 3); // 100 x 100 units: room for her full glow plus her drifting
+      drawFairy(50 + Math.sin(shopT * 1.6) * 6 + Math.sin(shopT * 37) * 1.2, 50 + Math.sin(shopT * 2.3) * 4 + Math.cos(shopT * 41) * 1.2, shopT, -1);
+      ctx.restore();
+    });
+    shopRaf = requestAnimationFrame(shopTick);
+  }
+  function openShop() {
+    shopOpen = true;
+    elShop.hidden = false;
+    card.inert = true;
+    renderShop();
+    lumiSay("Welcome, little moth! Coins that glitter in the dark buy things that glow. Take a look.");
+    cancelAnimationFrame(shopRaf);
+    shopRaf = requestAnimationFrame(shopTick);
+    elShopBack.focus({ preventScroll: true }); elShop.scrollTop = 0;
+  }
+  function closeShop() {
+    shopOpen = false;
+    cancelAnimationFrame(shopRaf);
+    elShop.hidden = true;
+    card.inert = false;
+    elShopBtn.focus();
+  }
+  elShopBtn.addEventListener("click", openShop);
+  elShopBack.addEventListener("click", closeShop);
+  elDevCoins.addEventListener("click", function () {
+    coins += 100; saveCoins(); elCoins.textContent = coins;
+    elDevCoins.textContent = "Added! Coins: " + coins;
+  });
+
+  // ---- leaderboard: top ten runs saved in this browser, three-character names ----
+  var BOARD_KEY = "lantern-moth-board", pending = null, lastName = "";
+  var board = [];
+  try { board = JSON.parse(localStorage.getItem(BOARD_KEY) || "[]"); if (!Array.isArray(board)) board = []; } catch (e) { board = []; }
+  try { lastName = localStorage.getItem("lantern-moth-name") || ""; } catch (e) {}
+  function saveBoard() { try { localStorage.setItem(BOARD_KEY, JSON.stringify(board)); } catch (e) {} }
+  function qualifies(sc) { return sc > 0 && (board.length < 10 || sc > board[board.length - 1].s); }
+  function cleanName(v) { return String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3); }
+  function addScore(name, sc, lv) {
+    var entry = { n: name, s: sc, l: lv, d: Date.now() };
+    board.push(entry);
+    board.sort(function (a, b) { return b.s - a.s || a.d - b.d; });
+    board = board.slice(0, 10);
+    saveBoard();
+    return board.indexOf(entry);
+  }
+  function commitPending(name) {
+    if (!pending) return -1;
+    var n = cleanName(name) || cleanName(lastName) || "MOTH";
+    try { localStorage.setItem("lantern-moth-name", n); } catch (e) {}
+    lastName = n;
+    var rank = addScore(n, pending.s, pending.l);
+    pending = null;
+    elNameRow.hidden = true;
+    return rank;
+  }
+  function renderBoard(mark) {
+    elLb.textContent = "";
+    if (!board.length) {
+      var em = document.createElement("li"); em.className = "empty"; em.textContent = "No scores yet. Fly a run and sign your name.";
+      elLb.appendChild(em); return;
+    }
+    board.forEach(function (e, i) {
+      var li = document.createElement("li");
+      if (i === mark) li.className = "me";
+      var a = document.createElement("span"); a.textContent = i + 1;
+      var b = document.createElement("b"); b.textContent = e.n;
+      var c = document.createElement("span"); c.textContent = e.s;
+      var d = document.createElement("small"); d.textContent = "LV " + e.l;
+      var x = document.createElement("button");
+      x.type = "button"; x.textContent = "Clear"; x.setAttribute("aria-label", "Clear " + e.n + "'s score of " + e.s);
+      x.addEventListener("click", function () {
+        // first click arms it, a second click within a couple of seconds removes the score
+        if (!x.classList.contains("arm")) {
+          x.classList.add("arm"); x.textContent = "Sure?";
+          setTimeout(function () { x.classList.remove("arm"); x.textContent = "Clear"; }, 2500);
+          return;
+        }
+        board.splice(board.indexOf(e), 1);
+        saveBoard();
+        renderBoard(mark === i ? -1 : (mark > i ? mark - 1 : mark));
+      });
+      li.appendChild(a); li.appendChild(b); li.appendChild(c); li.appendChild(d); li.appendChild(x);
+      elLb.appendChild(li);
+    });
+  }
+  function openBoard(mark) {
+    renderBoard(mark === undefined ? -1 : mark);
+    boardOpen = true;
+    elBoard.hidden = false;
+    card.inert = true;
+    elBoardBack.focus({ preventScroll: true }); elBoard.scrollTop = 0;
+  }
+  function closeBoard() {
+    boardOpen = false;
+    elBoard.hidden = true;
+    card.inert = false;
+    if (!elNameRow.hidden) elName.focus(); else goBtn.focus();
+  }
+  elBoardBtn.addEventListener("click", function () { openBoard(); });
+  elBoardBack.addEventListener("click", closeBoard);
+  function saveName() {
+    if (!pending) return;
+    var rank = commitPending(elName.value);
+    cBody.textContent = cBody.textContent.replace(/ Sign your name below\.$/, "") + " Saved as #" + (rank + 1) + ".";
+    openBoard(rank);
+  }
+  elNameSave.addEventListener("click", saveName);
+  elName.addEventListener("input", function () { elName.value = cleanName(elName.value); });
+
+  function end() {
+    bossMusic(false, 0);
+    state = "over";
+    mixSet(100);
+    sfxOver();
+    if (G.streak >= 3) { streakBonus(G.streak); G.streak = 0; }
+    var s = Math.floor(G.score);
+    var isBest = s > best && !G.dev;
+    if (isBest) {
+      best = s;
+      try { localStorage.setItem("lantern-moth-best-v2", String(best)); } catch (e) {}
+    }
+    elBest.textContent = fmt(best);
+    cTitle.textContent = G.neg ? "The Negative Moth fades" : "The glow went out";
+    cBody.className = "big";
+    cBody.textContent = (isBest ? "New best: " : "Lumens: ") + s + (isBest ? "" : ". Best is " + best + ".");
+    cKeys.textContent = "Reached level " + G.level + "." + (G.coinsRun ? " Coins this run: " + G.coinsRun + "." : "");
+    goBtn.textContent = "Fly again";
+    pending = qualifies(s) && !G.dev ? { s: s, l: G.level } : null;
+    if (pending) {
+      cBody.textContent += (isBest ? "." : "") + " You made the leaderboard. Sign your name below.";
+      elName.value = cleanName(lastName);
+    }
+    showCard("over");
+    if (pending) { elName.focus(); elName.select(); } else goBtn.focus();
+  }
+
+  // Pause keeps the whole run (score, level, rebirths, lanterns on screen) exactly as it is.
+  // developer shortcut: type "keranto" during the first level to jump straight to a later level for testing
+  var devOpen = false, devBuf = "";
+  function openDev() {
+    if (state !== "play" || G.tut) return;
+    state = "paused";
+    devOpen = true;
+    keys.l = keys.r = false;
+    G.items = []; G.haz = []; G.strands = []; G.webs = []; G.parts = []; G.pops = []; G.fl = null;
+    elDev.hidden = false;
+    try { if (AC) AC.suspend(); } catch (e) {}
+    elDev.querySelector("button").focus({ preventScroll: true }); elDev.scrollTop = 0;
+  }
+  function closeDev() {
+    devOpen = false;
+    elDev.hidden = true;
+    resumeGame();
+  }
+  function devStart(L) {
+    devOpen = false;
+    elDev.hidden = true;
+    start();
+    try { if (AC && !document.hidden) AC.resume(); } catch (e) {}
+    G.dev = true;
+    G.touched = true;
+    G.level = L;
+    G.got = 0;
+    G.lives = Math.floor(L / 10) + (G.sparked ? 1 : 0);
+    G.redAt = L + 1 + Math.floor(rand(0, 3));
+    G.banner = 2.2;
+    G.bt = "LEVEL " + L;
+    G.bs = "Developer start. This run stays off the leaderboard.";
+    burst(G.mx, MY, "#fff2cf", 30);
+  }
+  Array.prototype.forEach.call(elDev.querySelectorAll("button[data-lv]"), function (b) {
+    b.addEventListener("click", function () { devStart(parseInt(b.getAttribute("data-lv"), 10)); });
+  });
+  elDevBack.addEventListener("click", closeDev);
+
+  function pauseGame() {
+    if (state !== "play") return;
+    state = "paused";
+    keys.l = keys.r = false;
+    cTitle.textContent = "Paused";
+    cBody.className = "big";
+    cBody.textContent = "Lumens " + Math.floor(G.score) + "  ·  Level " + G.level;
+    cKeys.textContent = "P, Esc or Space to resume.";
+    goBtn.textContent = "Resume";
+    showCard(G.tut ? "pausedTut" : "paused");
+    if (G.tut) elFairy.hidden = true;
+    try { if (AC) AC.suspend(); } catch (e) {}
+    goBtn.focus();
+  }
+  function resumeGame() {
+    if (state !== "paused") return;
+    state = "play";
+    card.hidden = true;
+    elRestart.hidden = true;
+    if (G.tut) elFairy.hidden = false;
+    last = performance.now();
+    try { if (AC && !document.hidden) AC.resume(); } catch (e) {}
+  }
+
+  // ---- main menu and options ----
+  var MENU = { title: cTitle.textContent, body: cBody.textContent, keys: cKeys.textContent };
+  var optsOpen = false, boardOpen = false;
+  var T = null; // tutorial controller, null outside the tutorial
+  var F = null; // Lumi while she guides you: a real fairy flying beside the moth
+
+  // which buttons the card shows: menu | paused | pausedTut | over
+  function showCard(kind) {
+    elTut.hidden = kind !== "menu";
+    elRestart.hidden = kind !== "paused";
+    elMenu.hidden = kind === "menu";
+    elBoardBtn.hidden = kind !== "menu" && kind !== "over";
+    elShopBtn.hidden = kind !== "menu";
+    elNameRow.hidden = !(kind === "over" && pending);
+    elMenu.textContent = kind === "pausedTut" ? "Leave tutorial" : "Main menu";
+    card.hidden = false;
+  }
+
+  function goMenu() {
+    bossMusic(false, 0);
+    commitPending(elName.value);
+    reset();
+    T = null;
+    F = null;
+    cv.style.filter = NEG_OFF;
+    negAudio = false;
+    state = "ready";
+    keys.l = keys.r = false;
+    elFairy.hidden = true;
+    elMeter.classList.remove("hl");
+    cTitle.textContent = MENU.title;
+    cBody.className = "";
+    cBody.textContent = MENU.body;
+    cKeys.textContent = MENU.keys;
+    goBtn.textContent = "Start flying";
+    showCard("menu");
+    if (AC) audioInit();
+    goBtn.focus();
+  }
+
+  function setVolUI() {
+    volSfx.value = Math.round(vol.sfx * 100);
+    volMus.value = Math.round(vol.mus * 100);
+    outSfx.textContent = volSfx.value + "%";
+    outMus.textContent = volMus.value + "%";
+  }
+  function openOptions() {
+    optsOpen = true;
+    opts.hidden = false;
+    card.inert = true;
+    // from the pause screen the audio stays suspended; otherwise start the music so the slider can be heard
+    if (state !== "paused") { audioInit(); bgmStart(); }
+    elHint.hidden = !muted;
+    setVolUI();
+    elBack.focus({ preventScroll: true }); opts.scrollTop = 0;
+  }
+  function closeOptions() {
+    optsOpen = false;
+    opts.hidden = true;
+    card.inert = false;
+    goBtn.focus();
+  }
+  volSfx.addEventListener("input", function () {
+    vol.sfx = volSfx.value / 100;
+    outSfx.textContent = volSfx.value + "%";
+    applyVol(); saveVol();
+  });
+  volSfx.addEventListener("change", function () { if (state !== "paused") sfxCollect(3); });
+  volMus.addEventListener("input", function () {
+    vol.mus = volMus.value / 100;
+    outMus.textContent = volMus.value + "%";
+    applyVol(); saveVol();
+  });
+
+  // ---- tutorial: Lumi, the Light Fairy, teaches the game inside a real (scripted) run ----
+  function tutLantern(extra) {
+    var x = G.mx < W / 2 ? Math.min(W - 40, G.mx + 90) : Math.max(40, G.mx - 90);
+    var it = { x: x, y: -20, vy: 80, ph: rand(0, 6), r: 12, lit: true };
+    if (extra) for (var k in extra) it[k] = extra[k];
+    G.items.push(it);
+    return it;
+  }
+  function tutRed(caught) {
+    if (!T) return;
+    T.redDone = true;
+    T.redCaught = caught;
+    if (caught) {
+      G.banner = 1.8;
+      G.bt = "SUDDEN DEATH";
+      G.bs = "In a real run it starts now.";
+      burst(G.mx, MY, "#ff6179", 30);
+      sfxSD();
+    } else {
+      G.shout = { t: 0, text: "Quit duckin' the fade!" };
+      G.shake = reduce ? 0 : 0.3;
+      sfxDuck();
+    }
+  }
+  var TSTEPS = [
+    { talk: true, say: "Hello, little moth! I'm Lumi, the Light Fairy. Let me show you how to keep your glow alive." },
+    { say: "First, fly side to side. Use the arrow keys or A and D. On a touch screen, drag.",
+      enter: function () { T.travel = 0; T.hintMove = true; },
+      done: function () { return T.travel > 170; } },
+    { talk: true, hl: true, say: "That bar is your glow. It drains all the time, and if it runs out, your flight is over." },
+    { say: "Lanterns refill your light. Fly into the glowing one!",
+      enter: function () { T.collected = 0; T.respawn = 0.3; },
+      tick: function (dt) {
+        if (T.collected < 1 && G.items.length === 0) {
+          T.respawn -= dt;
+          if (T.respawn <= 0) { T.hint = tutLantern(); T.respawn = 0.6; }
+        }
+      },
+      done: function () { return T.collected >= 1; } },
+    { talk: true, say: "Catch lanterns without missing to build a streak. Streaks multiply your Lumens, and one miss resets it." },
+    { say: "Catch three more in a row to fill the lantern counter.", clear: true,
+      enter: function () { T.respawn = 0.2; },
+      tick: function (dt) {
+        if (G.items.length < 2) {
+          T.respawn -= dt;
+          if (T.respawn <= 0) { tutLantern({ x: rand(40, W - 40), vy: 90 }); T.respawn = 1.3; }
+        }
+      },
+      done: function () { return G.level >= 2; } },
+    { talk: true, say: "Level up! Every level is faster and needs two more lanterns than the last." },
+    { say: "Spiders drain your glow when they touch you. Dodge them!",
+      enter: function () { T.hz = 0; T.hzT = 0; },
+      tick: function (dt) {
+        T.hzT += dt;
+        if (T.hz < 1 && T.hzT > 0.6) {
+          T.hz = 1;
+          G.haz.push({ type: "spider", x: Math.max(30, Math.min(W - 30, G.mx + rand(-24, 24))), y: -10, vy: 150, r: 13, ph: rand(0, 6), snap: rand(MY - 120, MY - 20), cut: false });
+        }
+        if (T.hz < 2 && T.hzT > 3.4) {
+          T.hz = 2;
+          G.haz.push({ type: "spider", x: Math.max(30, Math.min(W - 30, G.mx + rand(-24, 24))), y: -10, vy: 150, r: 13, ph: rand(0, 6), snap: rand(MY - 120, MY - 20), cut: false });
+        }
+      },
+      done: function () { return (T.hz >= 2 && G.haz.length === 0) || T.hzT > 18; } },
+    { say: "Bats won't hurt you, but they bump lanterns off course. Watch this one, then catch it!",
+      enter: function () { T.bt = 0; T.batSpawned = false; T.hint = tutLantern({ x: W / 2, vy: 80 }); },
+      tick: function (dt) {
+        T.bt += dt;
+        if (!T.batSpawned && T.bt > 1.15) {
+          T.batSpawned = true;
+          G.haz.push({ type: "bat", x: -20, y: 200, vx: 140, r: 13, ph: 0 });
+        }
+      },
+      done: function () { return T.batSpawned && G.items.length === 0 && T.bt > 3.5; } },
+    { say: "Golden lanterns count as two catches. Grab this one!",
+      enter: function () { T.bonusGot = false; T.respawn = 0.3; },
+      tick: function (dt) {
+        if (!T.bonusGot && G.items.length === 0) {
+          T.respawn -= dt;
+          if (T.respawn <= 0) { T.hint = tutLantern({ bonus: true, r: 13 }); T.respawn = 0.6; }
+        }
+      },
+      done: function () { return T.bonusGot; } },
+    { talk: true, say: "Now the scary one. A red lantern starts Sudden Death: ten seconds where one hit costs you a life, but Lumens from lanterns count ten times. Way up high, it will cost you a rebirth too." },
+    { talk: true, say: "If you let a red lantern fall past you, you lose half your light. The dark always collects." },
+    { say: "Here comes one. Catch it or let it fall. Nothing is lost in practice.",
+      enter: function () { T.redDone = false; T.redCaught = false; T.redSpawned = false; T.respawn = 0.5; },
+      tick: function (dt) {
+        if (!T.redSpawned) {
+          T.respawn -= dt;
+          if (T.respawn <= 0) { T.redSpawned = true; T.hint = tutLantern({ red: true, r: 14, vy: 70 }); sfxRedSpawn(); }
+        }
+      },
+      done: function () { return T.redDone; } },
+    { talk: true, say: function () { return T.redCaught ? "Brave! In a real run you would be in Sudden Death right now." : "Ducking the fade? In a real run that would have cost you half your light."; } },
+    { talk: true, say: "One more thing: every tenth level earns a rebirth, a second chance when your glow goes out. Keep climbing!" },
+    { talk: true, last: true, say: "That's all you need to know. Go light up the night!" }
+  ];
+
+  function tutSay(text) { T.say = text; T.chars = 0; elSay.textContent = ""; }
+  function tutEnter(i) {
+    var s = TSTEPS[i];
+    T.i = i;
+    T.talk = !!s.talk;
+    T.advance = 0;
+    T.stepT = 0;
+    T.hint = null;
+    T.hintMove = false;
+    elMeter.classList.toggle("hl", !!s.hl);
+    tutSay(typeof s.say === "function" ? s.say() : s.say);
+    if (i === 0) T.chars = -80; // let Lumi arrive before she speaks
+    elNext.hidden = !s.talk;
+    elNext.textContent = s.last ? "Start flying" : "Next";
+    elSkip.textContent = s.last ? "Main menu" : "Skip tutorial";
+    tone(1568, 0.14, "sine", 0.05);
+    burst(G.mx, MY, "#fff2cf", 6);
+    if (s.enter) s.enter();
+  }
+  function tutNext() {
+    if (!T || !T.talk) return;
+    if (T.chars < T.say.length) { T.chars = T.say.length; elSay.textContent = T.say; return; }
+    if (TSTEPS[T.i].last) {
+      // the tutorial is over: Lumi stays where she is and, as a quiet secret, begins to drift down
+      var lx = F ? F.x + F.bx : W - 90, ly = F ? F.y + F.by : MY - 75;
+      start();
+      G.items.push({ fairy: true, x: lx, y: ly, vy: 10, ph: rand(0, 6), r: 15, lit: true });
+      return;
+    }
+    tutEnter(T.i + 1);
+  }
+  function tutUpdate(dt) {
+    var s = TSTEPS[T.i];
+    T.stepT += dt;
+    if (T.chars < T.say.length) {
+      T.chars = Math.min(T.say.length, T.chars + dt * 55);
+      elSay.textContent = T.say.slice(0, Math.max(0, Math.floor(T.chars)));
+    }
+    if (T.talk) return;
+    if (T.advance > 0) {
+      T.advance -= dt;
+      if (T.advance <= 0) tutEnter(T.i + 1);
+      return;
+    }
+    if (s.tick) s.tick(dt);
+    if (s.done && s.done()) {
+      T.advance = 1;
+      if (s.clear) {
+        // sweep away any spare lanterns so none are left hanging while Lumi talks
+        for (var ci = 0; ci < G.items.length; ci++) burst(G.items[ci].x, G.items[ci].y, "#fff2cf", 8);
+        G.items = [];
+      }
+      G.pops.push({ x: G.mx, y: MY - 30, t: 0, text: "Nice!", c: "#fff2cf" });
+      burst(G.mx, MY, "#fff2cf", 14);
+      if (F) { var fp = fairyPos(); burst(fp.x, fp.y, "#fff6c8", 12); }
+      sfxBonus();
+    }
+  }
+  // while Lumi is talking the world holds still, but you can still steer and the effects keep fading
+  function tutIdle(dt) {
+    var i, o;
+    G.t += dt * 0.5;
+    G.scroll += 8 * dt;
+    if (keys.l) G.tx -= 340 * dt;
+    if (keys.r) G.tx += 340 * dt;
+    G.tx = Math.max(18, Math.min(W - 18, G.tx));
+    G.mx += (G.tx - G.mx) * Math.min(1, dt * 14);
+    if (G.banner > 0) G.banner -= dt;
+    if (G.flash > 0) G.flash -= dt * 1.2;
+    if (G.shake > 0) G.shake -= dt;
+    if (G.shout) { G.shout.t += dt; if (G.shout.t > 1.8) G.shout = null; }
+    for (i = G.pops.length - 1; i >= 0; i--) { G.pops[i].t += dt; if (G.pops[i].t > 1.1) G.pops.splice(i, 1); }
+    for (i = G.strands.length - 1; i >= 0; i--) { G.strands[i].t += dt; if (G.strands[i].t > 2.6) G.strands.splice(i, 1); }
+    for (i = G.parts.length - 1; i >= 0; i--) {
+      o = G.parts[i];
+      o.life -= dt;
+      if (o.life <= 0) { G.parts.splice(i, 1); continue; }
+      o.x += o.vx * dt; o.y += o.vy * dt; o.vx *= 0.96; o.vy *= 0.96;
+    }
+  }
+  // Lumi hovers beside the moth on whichever side has room, darting about in quick little hops.
+  function fairyUpdate(dt) {
+    if (!F) return;
+    F.t += dt;
+    var side = G.mx > W - 120 ? -1 : 1;
+    var hx = G.mx + side * 85, hy = MY - 75;
+    var k = F.enter ? 1.3 : 2.4;
+    F.x += (hx - F.x) * Math.min(1, dt * k);
+    F.y += (hy - F.y) * Math.min(1, dt * k);
+    if (F.enter && Math.abs(hx - F.x) < 8) F.enter = false;
+    F.face += ((side > 0 ? -1 : 1) - F.face) * Math.min(1, dt * 6);
+    F.dart -= dt;
+    if (F.dart <= 0) { F.ox = rand(-22, 22); F.oy = rand(-20, 16); F.dart = rand(0.35, 1.1); }
+    F.bx += (F.ox - F.bx) * Math.min(1, dt * 7);
+    F.by += (F.oy - F.by) * Math.min(1, dt * 7);
+    F.spark -= dt;
+    if (F.spark <= 0) {
+      F.spark = 0.07;
+      var p = fairyPos();
+      G.parts.push({ x: p.x, y: p.y + 8, vx: rand(-12, 12), vy: rand(4, 26), life: rand(0.5, 0.9), max: 0.9, c: "#fff2cf" });
+    }
+  }
+  // her drawn position: the hover spot, the current dart, and a fast tiny tremble so she reads as buzzing
+  function fairyPos() {
+    return {
+      x: F.x + F.bx + Math.sin(F.t * 37) * 1.3,
+      y: F.y + F.by + Math.sin(F.t * 2.3) * 5 + Math.cos(F.t * 41) * 1.3
+    };
+  }
+
+  function drawFairy(x, y, t, face) {
+    var flap = 0.45 + 0.55 * Math.abs(Math.sin(t * 42)), s;
+    var g = ctx.createRadialGradient(x, y, 2, x, y, 38);
+    g.addColorStop(0, "rgba(255,244,214,0.6)");
+    g.addColorStop(1, "rgba(255,200,97,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, 38, 0, 6.283); ctx.fill();
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(face, 1);
+    for (s = -1; s <= 1; s += 2) {
+      ctx.save();
+      ctx.scale(s * flap, 1);
+      ctx.fillStyle = "rgba(207,224,255,0.7)";
+      ctx.strokeStyle = "rgba(233,240,255,0.8)";
+      ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.ellipse(9, -6, 11, 5, -0.6, 0, 6.283); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "rgba(207,224,255,0.5)";
+      ctx.beginPath(); ctx.ellipse(7, 3, 7, 3.6, 0.5, 0, 6.283); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = "#ffd98a";
+    ctx.beginPath(); ctx.moveTo(0, -1); ctx.lineTo(-5.5, 13); ctx.lineTo(5.5, 13); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#fff2cf";
+    ctx.beginPath(); ctx.arc(0, -5, 4.2, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = "#fff2cf";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(4, 3); ctx.lineTo(13, -6); ctx.stroke();
+    ctx.fillStyle = "rgba(255,246,200," + (0.6 + 0.4 * Math.sin(t * 12)) + ")";
+    ctx.beginPath();
+    ctx.moveTo(13, -13); ctx.lineTo(14.2, -9.2); ctx.lineTo(18, -8); ctx.lineTo(14.2, -6.8);
+    ctx.lineTo(13, -3); ctx.lineTo(11.8, -6.8); ctx.lineTo(8, -8); ctx.lineTo(11.8, -9.2);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  // The secret: once the tutorial is finished Lumi drifts down past you, and catching her is worth 10,000.
+  function catchFairy(o) {
+    G.score += 10000;
+    G.light = 100;
+    G.banner = 2.4;
+    G.bt = "LUMI'S GIFT";
+    G.bs = "+10,000 Lumens. Glow restored.";
+    G.pops.push({ x: o.x, y: o.y - 16, t: 0, text: "+10000", c: "#fff2cf" });
+    G.flash = 0.3;
+    burst(o.x, o.y, "#fff6c8", 40);
+    burst(G.mx, MY, "#ffd98a", 20);
+    [1046.5, 1318.5, 1568, 2093].forEach(function (f, i) { tone(f, 0.5, "sine", 0.07, null, i * 0.09); });
+  }
+
+  function startTutorial() {
+    reset();
+    cv.style.filter = NEG_OFF;
+    negAudio = false;
+    G.tut = true;
+    G.spawnL = Infinity;
+    G.spawnH = Infinity;
+    G.redAt = Infinity;
+    F = { x: W + 50, y: H * 0.55, t: 0, bx: 0, by: 0, ox: 0, oy: 0, dart: 0.4, spark: 0, face: -1, enter: true };
+    T = { i: 0, talk: false, say: "", chars: 0, travel: 0, collected: 0, advance: 0, stepT: 0, hint: null, hintMove: false, redDone: false, redCaught: false, bonusGot: false };
+    audioInit();
+    bgmStart();
+    sfxStart();
+    state = "play";
+    card.hidden = true;
+    elRestart.hidden = true;
+    elFairy.hidden = false;
+    last = performance.now();
+    tutEnter(0);
+  }
+
+  goBtn.addEventListener("click", function () { if (state === "paused") resumeGame(); else start(); });
+  elTut.addEventListener("click", startTutorial);
+  elOpt.addEventListener("click", openOptions);
+  elMenu.addEventListener("click", goMenu);
+  elRestart.addEventListener("click", start);
+  elBack.addEventListener("click", closeOptions);
+  elNext.addEventListener("click", tutNext);
+  elSkip.addEventListener("click", goMenu);
+  elPause.addEventListener("click", function () {
+    if (devOpen) return;
+    if (state === "play") pauseGame(); else if (state === "paused") resumeGame();
+    elPause.blur();
+  });
+
+  window.addEventListener("keydown", function (e) {
+    var k = e.key;
+    var ae = document.activeElement, onBtn = !!(ae && ae.tagName === "BUTTON");
+    if (ae && ae.tagName === "INPUT" && ae.type === "text") {
+      if (k === "Enter") { saveName(); e.preventDefault(); }
+      return;
+    }
+    if (devOpen) {
+      if (k === "Escape") { closeDev(); e.preventDefault(); }
+      return;
+    }
+    if (shopOpen) {
+      if (k === "Escape") { closeShop(); e.preventDefault(); }
+      return;
+    }
+    if (boardOpen) {
+      if (k === "Escape") { closeBoard(); e.preventDefault(); }
+      return;
+    }
+    if (state === "play" && !G.tut && G.level < 2 && k.length === 1) {
+      devBuf = (devBuf + k.toLowerCase()).slice(-7);
+      if (devBuf === "keranto") { devBuf = ""; openDev(); e.preventDefault(); return; }
+    }
+    if (optsOpen) {
+      if (k === "Escape") { closeOptions(); e.preventDefault(); }
+      return;
+    }
+    if (k === "p" || k === "P" || k === "Escape") {
+      if (state === "play") pauseGame(); else if (state === "paused") resumeGame();
+      e.preventDefault();
+      return;
+    }
+    if (state === "play" && G.tut && T && T.talk && (k === " " || k === "Enter") && !onBtn) {
+      tutNext();
+      e.preventDefault();
+      return;
+    }
+    if ((k === "f" || k === "F") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) { toggleFs(); e.preventDefault(); return; }
+    if (k === "ArrowLeft" || k === "a" || k === "A") { keys.l = true; if (state === "play" && !e.repeat) struggle(); e.preventDefault(); }
+    else if (k === "ArrowRight" || k === "d" || k === "D") { keys.r = true; if (state === "play" && !e.repeat) struggle(); e.preventDefault(); }
+    else if ((k === " " || k === "Enter") && state !== "play" && !onBtn) {
+      if (state === "paused") resumeGame(); else start();
+      e.preventDefault();
+    }
+  });
+  window.addEventListener("keyup", function (e) {
+    var k = e.key;
+    if (k === "ArrowLeft" || k === "a" || k === "A") keys.l = false;
+    else if (k === "ArrowRight" || k === "d" || k === "D") keys.r = false;
+  });
+  window.addEventListener("blur", function () { keys.l = keys.r = false; });
+
+  function pointerX(e) {
+    var r = cv.getBoundingClientRect();
+    return Math.max(18, Math.min(W - 18, (e.clientX - r.left) / r.width * W));
+  }
+  // ---- layout: measure the HUD so cards and on-canvas text sit below it, and size the canvas for sharp pixels ----
+  var TOP = 56, SC = 1;
+  function layout() {
+    var fh = elFrame.clientHeight, fw = elFrame.clientWidth;
+    if (!fw || !fh) return;
+    var hh = elHud.offsetHeight;
+    elFrame.style.setProperty("--hud-h", hh + "px");
+    H = Math.max(H_MIN, Math.min(H_MAX, Math.round(W * fh / fw)));
+    MY = H - 100;
+    VS = (MY + 20) / 520;
+    TOP = hh / fh * H;
+    // match the canvas backing store to the screen's pixel density (capped at 2x to keep phones fast)
+    var sc = Math.round(Math.min(2, Math.max(1, (window.devicePixelRatio || 1) * fw / W)) * 4) / 4;
+    if (sc !== SC || cv.height !== Math.round(H * sc)) { SC = sc; cv.width = Math.round(W * SC); cv.height = Math.round(H * SC); }
+  }
+  if (window.ResizeObserver) { var ro = new ResizeObserver(layout); ro.observe(elFrame); ro.observe(elHud); }
+  window.addEventListener("resize", layout);
+  window.addEventListener("orientationchange", layout);
+  layout();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+
+  // ---- fullscreen: hidden where the browser can't do it (iPhone Safari, or an already-installed app) ----
+  var docEl = document.documentElement;
+  var fsReq = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
+  var fsOk = !!fsReq && !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+  var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches) || navigator.standalone === true;
+  if (!fsOk || standalone) elFs.hidden = true;
+  function fsEl() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function lockPortrait() { try { var p = screen.orientation && screen.orientation.lock && screen.orientation.lock("portrait"); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
+  function toggleFs() {
+    if (!fsOk) return;
+    try {
+      if (fsEl()) {
+        var ex = document.exitFullscreen || document.webkitExitFullscreen;
+        if (ex) { var q = ex.call(document); if (q && q.catch) q.catch(function () {}); }
+      } else {
+        var r = fsReq.call(docEl, { navigationUI: "hide" });
+        if (r && r.then) r.then(lockPortrait, function () {}); else lockPortrait();
+      }
+    } catch (e) {}
+  }
+  function syncFs() {
+    var on = !!fsEl();
+    elFs.setAttribute("aria-pressed", on ? "true" : "false");
+    elFs.title = on ? "Exit fullscreen (F)" : "Fullscreen (F)";
+    setTimeout(layout, 60);
+  }
+  document.addEventListener("fullscreenchange", syncFs);
+  document.addEventListener("webkitfullscreenchange", syncFs);
+  elFs.addEventListener("click", function () { toggleFs(); elFs.blur(); });
+  cv.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+  cv.addEventListener("pointerdown", function (e) {
+    if (state === "play") { G.tx = pointerX(e); struggle(); }
+    try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  cv.addEventListener("pointermove", function (e) {
+    if (state === "play" && (e.buttons || e.pointerType === "touch" || e.pointerType === "mouse")) G.tx = pointerX(e);
+  });
+
+  // Rebirth: the world holds still, light gathers into the moth, a flash sweeps across, then play resumes.
+  function beginRebirth() {
+    bossMusic(false, 0);
+    G.rb = { t: 0 };
+    G.light = 0;
+    G.inv = 0;
+    G.shake = 0;
+    G.sd = null;
+    G.ev = null; G.stuck = 0; G.webs = [];
+    G.gather = [];
+    sfxGather();
+  }
+  function updateRebirth(dt) {
+    var rb = G.rb, i, p;
+    rb.t += dt;
+    if (rb.t < 1.6) {
+      for (i = 0; i < 4; i++) G.gather.push({ a: rand(0, 6.283), r: rand(160, 340), sp: rand(70, 130), s: rand(1, 2.2) });
+    }
+    for (i = G.gather.length - 1; i >= 0; i--) {
+      p = G.gather[i];
+      p.sp *= 1 + dt * 1.8;
+      p.r -= p.sp * dt;
+      p.a += dt * (1.2 + 90 / (p.r + 30));
+      if (p.r < 6) G.gather.splice(i, 1);
+    }
+    if (AC && bgm.filter) bgm.filter.frequency.setTargetAtTime(500 + Math.min(1, rb.t / 2) * 1500, AC.currentTime, 0.3);
+    if (rb.t >= 2.15) finishRebirth();
+  }
+  function finishRebirth() {
+    G.rb = null;
+    G.gather = [];
+    G.light = 70;
+    G.inv = 3;
+    G.haz = [];
+    G.strands = [];
+    G.streak = 0;
+    G.banner = 1.8;
+    G.flash = 1.04;
+    G.bt = "REBIRTH";
+    G.bs = "The light carries you back. Spider events rest for 2 levels.";
+    G.evRest = G.level + 2; // a safety net: no Itsy-Bitsy or Weaver until two levels after a rebirth
+    burst(G.mx, MY, "#fff2cf", 40);
+    sfxRebirth();
+  }
+
+  // Easter egg: run dry without touching a single lantern and the moth turns negative.
+  function becomeNegative() {
+    bossMusic(false, 0);
+    G.neg = true;
+    negAudio = true;
+    G.touched = true;
+    G.light = 100;
+    G.level = 1;
+    G.got = 0;
+    G.streak = 0;
+    G.haz = [];
+    G.items = [];
+    G.strands = [];
+    G.sd = null;
+    G.ev = null; G.stuck = 0; G.webs = [];
+    G.redAt = 3 + Math.floor(rand(0, 2));
+    G.inv = 2.5;
+    G.spawnL = 0.6;
+    G.spawnH = 2.8;
+    G.banner = 1.8;
+    G.bt = "NEGATIVE MOTH";
+    G.bs = "Dark lanterns feed you. Empty ones drain you.";
+    cv.style.filter = NEG_ON;
+    burst(G.mx, MY, "#8a94d6", 40);
+    sfxNegative();
+  }
+
+  // Red lantern: a sudden death stretch with x10 lantern points. A hit during it kills you and also costs one rebirth,
+  // (from level 50 on) so surviving a hit takes two rebirths (one lost as the penalty, one spent to come back).
+  var SD_LEN = 10;
+  function startSuddenDeath() {
+    G.sd = { t: 0, dur: SD_LEN };
+    G.hb = 0;
+    G.spawnH = Math.min(G.spawnH, 0.4);
+    G.banner = 1.8;
+    G.bt = "SUDDEN DEATH";
+    G.bs = G.level >= 50 ? (G.lives > 1 ? "A hit costs a life and a rebirth. Survive " + SD_LEN + "s." : "A hit ends the run. Survive " + SD_LEN + "s.") : (G.lives > 0 ? "A hit costs a life. Survive " + SD_LEN + "s." : "A hit ends the run. Survive " + SD_LEN + "s.");
+    if (G.ev) endEvent(false);
+    burst(G.mx, MY, "#ff6179", 30);
+    sfxSD();
+  }
+  function endSuddenDeath() {
+    var bonus = 150 * G.level;
+    G.sd = null;
+    G.score += bonus;
+    G.light = 100;
+    G.banner = 1.8;
+    G.bt = "SURVIVED";
+    G.bs = "+" + bonus.toLocaleString("en-US") + " Lumens. Glow restored.";
+    burst(G.mx, MY, "#fff2cf", 30);
+    sfxSurvive();
+  }
+
+
+  // Streak events. Itsy-Bitsy Spider (level 10+, streak 15): spiders shrink and speed up.
+  // The Weaver (level 20+, streak 25): a big spider clears the sky and shoots webs at the moth.
+  var ITSY_LEN = 10, BOSS_LEN = 25, SLIME_LEN = 25;
+  // Slime Rain (level 35+, streak 25): a nod to Terraria. Spiders are swapped for green, blue and purple slimes for 25s.
+  // Purple is a little bigger than a bat; each size up is slower but hits harder.
+  var SLIMES = [
+    { w: 28, h: 21, r: 10, body: "#5fdc5a", light: "#c4ffb8", dark: "#2a8c33", vm: 1.15, dm: 0.8, wt: 0.45 },
+    { w: 36, h: 27, r: 13, body: "#4d8dff", light: "#bcd6ff", dark: "#2652b8", vm: 1.0, dm: 1.0, wt: 0.35 },
+    { w: 46, h: 34, r: 17, body: "#a65cff", light: "#e0c6ff", dark: "#6430c0", vm: 0.85, dm: 1.25, wt: 0.2 }
+  ];
+  function pickSlime() { var r = Math.random(); return r < SLIMES[0].wt ? 0 : (r < SLIMES[0].wt + SLIMES[1].wt ? 1 : 2); }
+  function makeSlime(x, y, vy0) {
+    var c = pickSlime(), S = SLIMES[c];
+    return { type: "slime", c: c, x: x, y: y, vy: vy0 * S.vm, r: S.r, dm: S.dm, ph: rand(0, 6) };
+  }
+  function startSlime() {
+    var i, o;
+    G.ev = { type: "slime", t: 0, dur: SLIME_LEN, bgT: 0 };
+    G.itsyLatch = true; G.bossLatch = true;
+    G.slimeNext = G.level + 2;
+    G.spawnH = Math.min(G.spawnH, 0.3);
+    for (i = 0; i < G.haz.length; i++) {
+      o = G.haz[i];
+      if (o.type === "spider") { G.haz[i] = makeSlime(o.x, o.y, (o.vy / (o.s ? 1.25 : 1)) || 150); burst(o.x, o.y, "#7dff6a", 10); }
+    }
+    G.banner = 2.2; G.bt = "SLIME RAIN"; G.bs = "The spiders are gone. Something worse is falling. Survive " + SLIME_LEN + "s.";
+    burst(G.mx, MY, "#7dff6a", 30);
+    sfxSlimeRain();
+  }
+  function sfxSlimeRain() { [196, 247, 294, 392].forEach(function (f, i) { tone(f, 0.28, "sine", 0.1, f * 1.5, i * 0.12); }); tone(110, 0.9, "triangle", 0.08, 70, 0.1); }
+  function sfxSquish() { tone(180, 0.2, "sine", 0.1, 70); tone(90, 0.16, "triangle", 0.05, 50, 0.04); }
+  // which streak-25 event is ready (if any). When both are, it's a coin flip.
+  function bigReady() {
+    if (G.streak < 25 || G.bossLatch || G.level < G.evRest) return null;
+    var b = G.level >= 20 && G.level >= G.bossNext, sl = G.level >= 35 && G.level >= G.slimeNext;
+    if (b && sl) return Math.random() < 0.5 ? "boss" : "slime";
+    return b ? "boss" : (sl ? "slime" : null);
+  }
+  function startItsy() {
+    G.ev = { type: "itsy", t: 0, dur: ITSY_LEN };
+    G.itsyLatch = true;
+    G.spawnH = Math.min(G.spawnH, 0.3);
+    G.banner = 1.8; G.bt = "ITSY-BITSY SPIDER"; G.bs = "Smaller. Faster. Survive " + ITSY_LEN + "s.";
+    burst(G.mx, MY, "#c9a8ff", 26);
+    sfxEvent(false);
+  }
+  function startBoss() {
+    var i;
+    for (i = 0; i < G.haz.length; i++) burst(G.haz[i].x, G.haz[i].y, "#c9a8ff", 8);
+    G.haz = [];
+    G.ev = { type: "boss", t: 0, dur: BOSS_LEN, bx: W / 2, by: -70, fire: 1.2, pulse: 0, webLeft: 2 + Math.floor(rand(0, 2)) };
+    G.webs = [];
+    G.itsyLatch = true; G.bossLatch = true;
+    // cooldown: 3 levels, 2 from an activation at level 30+, 1 from level 35+ (so he can return the very next level)
+    G.bossNext = G.level + Math.max(1, 3 - Math.floor(Math.max(0, G.level - 25) / 5));
+    G.banner = 2.2; G.bt = "THE WEAVER"; G.bs = "Dodge his webs. Hold on for " + BOSS_LEN + "s.";
+    burst(G.mx, MY, "#c9a8ff", 30);
+    sfxEvent(true);
+  }
+  function endEvent(reward) {
+    var e = G.ev, bonus;
+    G.ev = null; G.webs = [];
+    if (e && e.type === "boss") G.spawnH = 1.5;
+    if (!reward || !e) return;
+    // survival bonus: 10,000 for Itsy-Bitsy, 25,000 for the Weaver, each growing 1.1x for every time that same event has been survived this run
+    // Slime Rain pays 35,000, growing the same way
+    var key = e.type === "boss" ? "boss" : (e.type === "slime" ? "slime" : "itsy"), prior = G.wins[key], mult = Math.pow(1.1, prior);
+    bonus = Math.round((key === "boss" ? 25000 : (key === "slime" ? 35000 : 10000)) * mult);
+    G.wins[key]++;
+    var tag = " Lumens" + (prior ? " (x" + mult.toFixed(2) + ")" : "");
+    if (e.type === "boss") {
+      G.light = 100;
+      G.bt = "THE WEAVER RETREATS"; G.bs = "+" + bonus.toLocaleString("en-US") + tag + ". Glow restored.";
+      burst(e.bx, e.by, "#c9a8ff", 40);
+    } else if (e.type === "slime") {
+      G.light = 100;
+      G.bt = "THE SLIME RAIN STOPS"; G.bs = "+" + bonus.toLocaleString("en-US") + tag + ". Glow restored.";
+      burst(G.mx, MY, "#7dff6a", 30);
+    } else {
+      G.itsyNext = G.lt + 100; // rests until another 100 lanterns have been collected
+      G.bt = "SPIDERS SCATTER"; G.bs = "+" + bonus.toLocaleString("en-US") + tag + ".";
+    }
+    G.score += bonus;
+    G.banner = 1.8;
+    sfxSurvive();
+  }
+  function sfxEvent(big) {
+    tone(big ? 65 : 880, big ? 1.1 : 0.4, big ? "sawtooth" : "triangle", 0.1, big ? 42 : 1320);
+    tone(big ? 98 : 1175, big ? 0.9 : 0.4, "triangle", 0.06, null, 0.1);
+  }
+  function sfxWebShot() { tone(700, 0.12, "triangle", 0.05, 260); }
+  function sfxStuck() { tone(240, 0.22, "sawtooth", 0.07, 110); }
+  function sfxStruggle() { tone(420 + Math.random() * 120, 0.05, "square", 0.03, 300); }
+  function struggle() { if (G.stuck > 0) G.stuck = Math.max(0, G.stuck - 0.12); }
+  // aim partway ahead of the moth: half its current drift over the shot's flight time, capped, so it is not a perfect read
+  function aimShot(ox, oy, speed) {
+    var px = G.mx, i, dx, dy, T, L;
+    for (i = 0; i < 3; i++) {
+      dx = px - ox; dy = MY - oy; T = Math.sqrt(dx * dx + dy * dy) / speed;
+      px = Math.max(18, Math.min(W - 18, G.mx + Math.max(-110, Math.min(110, G.mvx * T * 0.5))));
+    }
+    dx = px - ox; dy = MY - oy; L = Math.sqrt(dx * dx + dy * dy) || 1;
+    return { vx: dx / L * speed, vy: dy / L * speed };
+  }
+  function updateEvent(dt) {
+    var e = G.ev, i, w, dx, dy, a;
+    e.t += dt;
+    if (e.type === "itsy") {
+      if (e.hand !== undefined) {
+        // the Weaver is taking over: the little spiders thin out for three seconds, then he drops in
+        e.hand -= dt;
+        if (e.hand <= 0) { if (e.next === "slime") startSlime(); else startBoss(); }
+        return;
+      }
+      if (e.t >= e.dur) endEvent(true);
+      return;
+    }
+    if (e.type === "slime") {
+      // distant slimes drizzle down the background (purely decoration)
+      e.bgT -= dt;
+      if (e.bgT <= 0) { e.bgT = rand(0.08, 0.22); G.bgs.push({ x: rand(10, W - 10), y: -12, vy: rand(45, 95), s: rand(0.26, 0.4), c: pickSlime(), ph: rand(0, 6), a: rand(0.28, 0.45) }); }
+      if (e.t >= e.dur) endEvent(true);
+      return;
+    }
+    G.spawnH = 99; // the Weaver rules the sky alone
+    e.pulse = Math.max(0, e.pulse - dt * 2);
+    if (e.leave) {
+      // retreat: the Weaver reels himself up his own thread and climbs out of sight
+      e.lt += dt;
+      e.by -= (50 + 420 * e.lt) * dt;
+      e.bx += (W / 2 - e.bx) * Math.min(1, dt * 1.5);
+      G.webs = []; // a moth already caught stays caught until she wriggles free
+      if (e.by < -110) endEvent(true);
+      return;
+    }
+    var enter = Math.min(1, e.t / 1.6);
+    e.bx = W / 2 + Math.sin(e.t * 0.8) * 120 * enter;
+    e.by = -70 + (70 + MY - 300 * VS) * (1 - Math.pow(1 - enter, 3)) + Math.sin(e.t * 1.7) * 6 * enter;
+    if (e.t >= e.dur) { e.leave = true; e.lt = 0; G.webs = []; return; }
+    if (enter >= 1 && G.stuck <= 0) {
+      e.fire -= dt;
+      if (e.fire <= 0) {
+        // two or three webs, then one venom glob, then the count starts over
+        var sp = (250 + Math.min(G.level, 100) * 1.6) * VS, glob = e.webLeft <= 0;
+        if (glob) e.webLeft = 2 + Math.floor(rand(0, 2)); else e.webLeft--;
+        a = aimShot(e.bx, e.by + BOSS_MOUTH, glob ? sp * 2 : sp);
+        G.webs.push({ x: e.bx, y: e.by + BOSS_MOUTH, vx: a.vx, vy: a.vy, t: 0, glob: glob, flip: Math.random() < 0.5 ? -1 : 1 });
+        e.fire = 1.0; e.pulse = 1; // 1.5x as often as before
+        if (glob) sfxGlob(); else sfxWebShot();
+      }
+    } else if (G.stuck > 0) {
+      e.fire = 0.9; // a pause once the moth breaks free
+    }
+    for (i = G.webs.length - 1; i >= 0; i--) {
+      w = G.webs[i];
+      w.t += dt; w.x += w.vx * dt; w.y += w.vy * dt;
+      dx = w.x - G.mx; dy = w.y - MY;
+      if (w.glob) {
+        // poison glob: half a web's size, twice as fast, burns the glow instead of binding the moth
+        if (G.stuck <= 0 && G.inv <= 0 && dx * dx + dy * dy < 20 * 20) {
+          G.light -= 25;
+          G.inv = 1.2;
+          G.streak = 0;
+          G.shake = reduce ? 0 : 0.25;
+          G.pops.push({ x: G.mx, y: MY - 30, t: 0, text: "-25 POISON", c: "#9cff7a" });
+          burst(G.mx, MY, "#7dff5a", 18);
+          sfxHit();
+          G.webs.splice(i, 1);
+          continue;
+        }
+      } else if (G.stuck <= 0 && webHit(w)) {
+        G.stuck = 1.6;
+        G.webs = G.webs.filter(function (q) { return q.glob; });
+        burst(G.mx, MY, "#eef0ff", 16);
+        sfxStuck();
+        break;
+      }
+      if (w.y > H + 30 || w.x < -30 || w.x > W + 30) G.webs.splice(i, 1);
+    }
+  }
+  function sfxGlob() { tone(320, 0.16, "sine", 0.06, 110); tone(180, 0.1, "square", 0.025, 90); }
+
+  function sfxMilestone() { [1046.5, 1318.5, 1568, 2093, 2637].forEach(function (f, i) { tone(f, 0.35, "sine", 0.05, null, i * 0.06); }); }
+  function sfxCoin() { tone(1760, 0.12, "sine", 0.07); tone(2349.3, 0.28, "sine", 0.06, null, 0.07); }
+  function catchCoin(o) {
+    coins++;
+    G.coinsRun++;
+    saveCoins();
+    elCoins.textContent = coins;
+    G.pops.push({ x: o.x, y: o.y - 14, t: 0, text: "+1 COIN", c: "#e6ecf5" });
+    burst(o.x, o.y, "#e6ecf5", 10);
+    sfxCoin();
+  }
+
+  // when a streak ends, it pays out a bonus that grows exponentially with its length
+  function streakBonus(n) {
+    if (G.tut || n < 3) return;
+    var b = Math.floor(25 * (Math.pow(1.13, Math.min(n, 50)) - 1)); // independent of level
+    if (b <= 0) return;
+    G.score += b;
+    G.pops.push({ x: W / 2, y: H - 56, t: 0, text: "STREAK x" + n + " ENDED  +" + b.toLocaleString("en-US"), c: "#ffd98a" });
+  }
+
+  function collectLantern(o) {
+    // a bonus lantern counts as two collections; sudden death multiplies the score by ten
+    var n = o.bonus ? 2 : 1, mult = G.sd ? 10 : 1, gain = 0, k;
+    G.touched = true;
+    if (G.tut && T) { T.collected++; if (o.bonus) T.bonusGot = true; }
+    G.light = Math.min(100, G.light + 20);
+    for (k = 0; k < n; k++) {
+      G.streak++;
+      gain += (10 + Math.min(G.streak, 10) * 2) * G.level * mult;
+    }
+    G.score += gain;
+    burst(o.x, o.y, o.bonus ? "#fff6c8" : (G.neg ? "#8a94d6" : "#ffd98a"), o.bonus ? 22 : 12);
+    sfxCollect(G.streak);
+    if (o.bonus) sfxBonus();
+    if (o.bonus || G.sd) G.pops.push({ x: o.x, y: o.y - 16, t: 0, text: (o.bonus ? "DOUBLE  " : "") + "+" + gain, c: G.sd ? "#ff9aa8" : "#fff2cf" });
+    G.got += n;
+    G.lt += n;
+    if (G.got >= need(G.level)) {
+      G.got -= need(G.level);
+      G.level++;
+      G.light = Math.min(100, G.light + 25);
+      G.banner = 1.8;
+      G.bt = "LEVEL " + G.level;
+      G.bs = (G.level <= MAXLV ? "Faster. " : "Top speed. ") + need(G.level) + " lanterns to clear.";
+      burst(G.mx, MY, "#fff2cf", 30);
+      sfxLevel();
+      if (G.level % 10 === 0) {
+        G.lives++;
+        G.bs = "Rebirth earned. The light remembers you.";
+        sfxLife();
+      }
+      if (G.level === MAXLV) G.bs = "Top speed reached. Rebirth earned.";
+    }
+  }
+
+  function update(dt) {
+    if (G.rb) { updateRebirth(dt); return; }
+    if (G.tut && T) {
+      fairyUpdate(dt);
+      tutUpdate(dt);
+      if (T.talk) { tutIdle(dt); return; }
+    }
+    G.t += dt;
+    G.scroll += scrollSpeed(G.level) * (reduce ? 0.4 : 1) * dt;
+    var d = speedMul(G.level);
+    var d2 = d * (G.sd ? 1.15 : 1);
+
+    var pmx = G.mx;
+    if (G.stuck > 0) {
+      G.stuck -= dt; G.tx = G.mx; G.struggleT -= dt;
+      if (G.struggleT <= 0) { sfxStruggle(); G.struggleT = 0.16; }
+    } else {
+      if (keys.l) G.tx -= 340 * dt;
+      if (keys.r) G.tx += 340 * dt;
+      G.tx = Math.max(18, Math.min(W - 18, G.tx));
+      G.mx += (G.tx - G.mx) * Math.min(1, dt * 14);
+    }
+    G.mvx += (((G.mx - pmx) / Math.max(dt, 0.001)) - G.mvx) * Math.min(1, dt * 12);
+    if (G.tut && T) T.travel += Math.abs(G.mx - pmx);
+
+    G.light -= glowDrain(G.level) * dt;
+    if (G.tut) G.light = Math.max(G.light, 40);
+    G.beep = (G.beep || 0) - dt;
+    if (G.light < 30 && G.beep <= 0) { tone(140, 0.08, "square", 0.04); G.beep = 0.9; }
+    if (bgm.filter && AC) bgm.filter.frequency.setTargetAtTime(500 + Math.max(0, G.light) * 18, AC.currentTime, 0.3);
+    if (G.inv > 0) G.inv -= dt;
+    if (G.shake > 0) G.shake -= dt;
+    if (G.banner > 0) G.banner -= dt;
+    if (G.flash > 0) G.flash -= dt * 1.2;
+
+    if (G.sd) {
+      G.sd.t += dt;
+      G.hb -= dt;
+      if (G.hb <= 0) { tone(58, 0.18, "sine", 0.16, 38); G.hb = 0.85; }
+      if (G.sd.t >= G.sd.dur) endSuddenDeath();
+    }
+
+    if (!G.tut) {
+      if (G.streak < 15) G.itsyLatch = false;
+      if (G.streak < 25) G.bossLatch = false;
+      var big = (!G.sd && (!G.ev || (G.ev.type === "itsy" && G.ev.hand === undefined))) ? bigReady() : null;
+      if (!G.ev && !G.sd) {
+        if (big === "boss") startBoss();
+        else if (big === "slime") startSlime();
+        else if (G.level >= 10 && G.streak >= 15 && !G.itsyLatch && G.lt >= G.itsyNext && G.level >= G.evRest) startItsy();
+      } else if (G.ev && G.ev.type === "itsy" && G.ev.hand === undefined && !G.sd && big) {
+        // the Weaver outranks the little spiders: a three second hand-over keeps it smooth
+        G.ev.hand = 3;
+        G.ev.next = big;
+        G.spawnH = 3;
+        G.banner = 2.2; G.bt = big === "slime" ? "THE SKY DRIPS" : "THE WEAVER STIRS"; G.bs = big === "slime" ? "Something squishy is coming..." : "Something bigger is coming...";
+        tone(65, 1.6, "sawtooth", 0.08, 42);
+      }
+    }
+    if (G.ev) updateEvent(dt);
+    bossMusic(!!(G.ev && G.ev.type === "boss"), G.ev ? G.ev.dur - G.ev.t : 0);
+
+    var i, j, o, b, dx, dy;
+
+    // milestone lights: the string appears 5,000 Lumens before each 100,000 and reaches the moth right as it is earned
+    G.rate += (Math.max(0, (G.score - G.pscore) / Math.max(dt, 0.001)) - G.rate) * Math.min(1, dt * 0.4);
+    G.pscore = G.score;
+    var nextM = (G.msDone + 1) * 100000;
+    if (!G.fl && !G.tut && G.score >= nextM - 5000) G.fl = { m: nextM, s0: G.score, y: -40, hit: false };
+    if (G.fl) {
+      var fl = G.fl;
+      if (!fl.hit) {
+        var prog = fl.m > fl.s0 ? Math.min(1, (G.score - fl.s0) / (fl.m - fl.s0)) : 1;
+        // score arrives in lumps, so the string glides toward where it should be instead of jumping there
+        var target = -40 + (MY + 40) * prog;
+        if (target > fl.y) fl.y += Math.min((target - fl.y) * Math.min(1, dt * 2.2), 260 * dt);
+        if (G.score >= fl.m) { fl.hit = true; G.msDone = Math.floor(G.score / 100000); sfxMilestone(); }
+      } else fl.y += (120 + Math.min(140, Math.max(0, MY - fl.y) * 2.2)) * dt;
+      if (fl.y > H + 90) G.fl = null;
+    }
+    if (G.shout) { G.shout.t += dt; if (G.shout.t > 1.8) G.shout = null; }
+    for (i = G.pops.length - 1; i >= 0; i--) {
+      G.pops[i].t += dt;
+      if (G.pops[i].t > 1.1) G.pops.splice(i, 1);
+    }
+
+    G.spawnL -= dt;
+    if (G.spawnL <= 0) {
+      var it = { x: rand(32, W - 32), y: -20, vy: rand(70, 105) * d, ph: rand(0, 6), r: 12, lit: true };
+      var hasRed = false;
+      for (j = 0; j < G.items.length; j++) if (G.items[j].red) hasRed = true;
+      if (G.level >= G.redAt && !G.sd && !G.ev && !hasRed) {
+        it.red = true;
+        it.r = 14;
+        it.vy *= 0.85;
+        G.redAt = G.level + 3 + Math.floor(rand(0, 3));
+        sfxRedSpawn();
+      } else {
+        // bonus lanterns arrive after a random run of ordinary ones, independent of level
+        if (G.level >= 10 && !G.tut) G.coinIn--;
+        if (G.level >= 10 && !G.tut && G.coinIn <= 0) {
+          it.coin = true;
+          it.lit = true;
+          it.r = 10;
+          it.vy *= 1.1;
+          G.coinIn = 25 + Math.floor(rand(0, 21));
+        } else {
+        G.bonusIn--;
+        if (G.bonusIn <= 0) {
+          it.bonus = true;
+          it.lit = true;
+          it.r = 13;
+          G.bonusIn = 12 + Math.floor(rand(0, 11));
+        } else if (G.neg) {
+          // negative dimension: dark ("lit") sprites feed you, empty ("unlit") ones drain you
+          it.lit = Math.random() < 0.65;
+        }
+        }
+      }
+      G.items.push(it);
+      G.spawnL = rand(0.8, 1.4) / Math.sqrt(d);
+    }
+    if (G.spawnH > 5 && !G.tut && !(G.ev && G.ev.type === "boss")) G.spawnH = 1.5; // the Weaver holds spawns back; however he leaves, the sky refills
+    G.spawnH -= dt;
+    if (G.spawnH <= 0) {
+      var itsy = G.ev && G.ev.type === "itsy" && G.ev.hand === undefined;
+      var slimy = G.ev && G.ev.type === "slime";
+      if (slimy && Math.random() < 0.75) {
+        G.haz.push(makeSlime(rand(30, W - 30), -14, rand(120, 175) * d2));
+      } else if (!slimy && (itsy || Math.random() < 0.5)) {
+        G.haz.push({ type: "spider", x: rand(30, W - 30), y: -10, vy: rand(120, 175) * d2 * (itsy ? 1.25 : 1), r: itsy ? 7.5 : 13, s: itsy ? 0.55 : 1, ph: rand(0, 6), snap: rand(MY - 120, MY + 20), cut: false });
+      } else {
+        var fromLeft = Math.random() < 0.5;
+        var by0 = rand(120, MY - 80);
+        // the higher a bat spawns, the harder it shoves: the lowest keep the base 90, the highest reach 150
+        G.haz.push({ type: "bat", x: fromLeft ? -20 : W + 20, y: by0, vx: (fromLeft ? 1 : -1) * rand(110, 170) * d2, r: 13, ph: rand(0, 6), push: 90 + 60 * (MY - 80 - by0) / (MY - 200) });
+      }
+      G.spawnH = rand(0.9, 1.6) / hazRate(G.level) / (G.sd ? 1.8 : 1) / (itsy ? 1.375 : 1) / (slimy ? 1.3 : 1);
+    }
+
+    for (i = G.items.length - 1; i >= 0; i--) {
+      o = G.items[i];
+      o.y += o.vy * VS * dt;
+      o.x += Math.sin(G.t * 2 + o.ph) * 22 * dt;
+      if (o.kv) {
+        o.x += o.kv * dt;
+        o.kv *= Math.exp(-3 * dt);
+        if (Math.abs(o.kv) < 1) o.kv = 0;
+      }
+      if (G.lured && !G.tut && !o.red && !o.fairy && o.lit !== false && o.y > MY - 170 && o.y < MY + 20 && Math.abs(G.mx - o.x) < 75) {
+        o.x += (G.mx - o.x) * Math.min(1, dt * 1.1); // Lumi's Lure (one run): a gentle pull toward the moth
+      }
+      o.x = Math.max(14, Math.min(W - 14, o.x));
+      dx = o.x - G.mx; dy = o.y - MY;
+      if (dx * dx + dy * dy < (o.r + 11) * (o.r + 11)) {
+        G.items.splice(i, 1);
+        if (o.red) {
+          if (G.tut) tutRed(true); else startSuddenDeath();
+        } else if (o.fairy) {
+          catchFairy(o);
+        } else if (o.coin) {
+          catchCoin(o);
+        } else if (G.neg && o.lit === false) {
+          G.light -= 20;
+          G.streak = 0;
+          G.shake = reduce ? 0 : 0.25;
+          burst(o.x, o.y, "#ff6179", 14);
+          sfxHit();
+        } else {
+          collectLantern(o);
+        }
+      } else if (o.y > H + 24) {
+        G.items.splice(i, 1);
+        if (o.red) { if (G.tut) tutRed(false); else missRed(); }
+        else if (o.fairy || o.coin) { /* Lumi and coins drift away quietly, no streak lost */ }
+        else if (G.streak > 0 && !(G.neg && o.lit === false)) { sfxMiss(); G.streak = 0; }
+      }
+    }
+
+    for (i = G.haz.length - 1; i >= 0; i--) {
+      o = G.haz[i];
+      if (o.type === "spider" || o.type === "slime") {
+        o.y += o.vy * VS * dt;
+        if (o.type === "slime") o.x += Math.sin(G.t * 2.2 + o.ph) * 18 * dt;
+        if (o.type === "spider" && !o.cut && o.y > o.snap) {
+          o.cut = true;
+          G.strands.push({ x: o.x, y1: o.y, t: 0, ph: rand(0, 6.283) });
+          burst(o.x, o.y - 8, "#dfe3ff", 6);
+          sfxSnap();
+        }
+        // a spider shoves any lantern it overlaps to whichever side of it the lantern is nearest, leaving room to grab it
+        for (j = 0; j < G.items.length; j++) {
+          b = G.items[j];
+          if (b.fairy || b.lastSpider === o) continue;
+          dx = b.x - o.x; dy = b.y - o.y;
+          var rr = (o.r + b.r + 6) * (o.s || 1) + 4;
+          if (dx * dx + dy * dy < rr * rr) {
+            b.kv = (b.kv || 0) + (dx === 0 ? (Math.random() < 0.5 ? 1 : -1) : (dx > 0 ? 1 : -1)) * 130;
+            b.lastSpider = o;
+            burst(b.x, b.y, "#c9a8ff", 5);
+            sfxBump();
+          }
+        }
+      } else {
+        o.x += o.vx * dt;
+        o.y += Math.sin(G.t * 6 + o.ph) * 60 * dt;
+        // bats clip lanterns and nudge them a little, never more than two nudges per lantern
+        for (j = 0; j < G.items.length; j++) {
+          b = G.items[j];
+          if (b.fairy || b.lastBat === o || (b.kn || 0) >= 2) continue;
+          dx = b.x - o.x; dy = b.y - o.y;
+          if (dx * dx + dy * dy < (o.r + b.r + 4) * (o.r + b.r + 4)) {
+            b.kv = (b.kv || 0) + (o.vx > 0 ? 1 : -1) * (o.push || 90);
+            b.kn = (b.kn || 0) + 1;
+            b.lastBat = o;
+            burst(b.x, b.y, "#aab2ff", 5);
+            sfxBump();
+          }
+        }
+      }
+      dx = o.x - G.mx; dy = o.y - MY;
+      if (G.inv <= 0 && dx * dx + dy * dy < (o.r + 9) * (o.r + 9)) {
+        var dmg = o.type === "spider" ? spiderDamage(o.vy) : (o.type === "slime" ? Math.min(100, spiderDamage(o.vy) * o.dm) : 25);
+        if (G.sd) {
+          // a hit in sudden death costs the life; from level 50 it also costs one rebirth on top of it
+          G.sd = null;
+          if (G.level >= 50 && G.lives > 0) {
+            G.lives--;
+            G.pops.push({ x: G.mx, y: MY - 30, t: 0, text: "-1 REBIRTH", c: "#ff9aa8" });
+          }
+          G.light = 0;
+          G.streak = 0;
+          G.shake = reduce ? 0 : 0.35;
+          burst(G.mx, MY, "#ff6179", 30);
+          sfxHit();
+        } else {
+          G.light -= dmg;
+          G.pops.push({ x: G.mx, y: MY - 30, t: 0, text: "-" + Math.round(dmg), c: "#ff9aa8" });
+          G.inv = 1.2;
+          G.streak = 0;
+          G.shake = reduce ? 0 : 0.25;
+          burst(G.mx, MY, o.type === "slime" ? SLIMES[o.c].body : "#ff6179", 16);
+          sfxHit();
+          if (o.type === "slime") sfxSquish();
+        }
+      }
+      if (o.y > H + 40 || o.x < -50 || o.x > W + 50) G.haz.splice(i, 1);
+    }
+
+    for (i = G.strands.length - 1; i >= 0; i--) {
+      G.strands[i].t += dt;
+      if (G.strands[i].t > 2.6) G.strands.splice(i, 1);
+    }
+    for (i = G.parts.length - 1; i >= 0; i--) {
+      o = G.parts[i];
+      o.life -= dt;
+      if (o.life <= 0) { G.parts.splice(i, 1); continue; }
+      o.x += o.vx * dt; o.y += o.vy * dt; o.vx *= 0.96; o.vy *= 0.96;
+    }
+    for (i = G.bgs.length - 1; i >= 0; i--) {
+      o = G.bgs[i];
+      o.y += o.vy * dt; o.x += Math.sin(G.t * 1.6 + o.ph) * 6 * dt;
+      if (o.y > H + 20) G.bgs.splice(i, 1);
+    }
+
+    if (G.streak === 0 && G.pstreak >= 3) streakBonus(G.pstreak);
+    G.pstreak = G.streak;
+    if (G.light <= 0) {
+      if (G.lives > 0) { G.lives--; beginRebirth(); }
+      else if (!G.touched && !G.neg) { becomeNegative(); }
+      else { G.light = 0; end(); }
+    }
+  }
+
+  // milestone banner: a sagging string of dark orange fairy lights hanging in the background, the score hanging from it
+  function drawLights(f) {
+    var n = 12, i, x, y, u, base = f.y;
+    var sag = function (v) { return base + 26 * Math.sin(Math.PI * v); };
+    ctx.save();
+    ctx.strokeStyle = "rgba(150,100,60,0.7)"; ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    for (i = 0; i <= 40; i++) { x = -4 + (W + 8) * i / 40; y = sag(i / 40); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+    ctx.stroke();
+    for (i = 0; i < n; i++) {
+      u = (i + 0.5) / n;
+      x = W * u; y = sag(u) + 3;
+      var tw = 0.75 + 0.25 * Math.sin(G.t * 6 + i * 1.7);
+      var g = ctx.createRadialGradient(x, y + 5, 1, x, y + 5, 20);
+      g.addColorStop(0, "rgba(226,113,29,0.9)"); g.addColorStop(1, "rgba(226,113,29,0)");
+      ctx.globalAlpha = 0.5 * tw;
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y + 5, 20, 0, 6.283); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#e2711d"; ctx.beginPath(); ctx.ellipse(x, y + 6, 3, 4.4, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = "#3a2210"; ctx.fillRect(x - 1.5, y + 1, 3, 2.5);
+    }
+    ctx.textAlign = "center";
+    ctx.font = "500 11px 'DM Mono', monospace"; ctx.fillStyle = "#e9b98c";
+    ctx.fillText("LUMENS MILESTONE", W / 2, base + 52);
+    ctx.font = "800 30px Syne, sans-serif"; ctx.fillStyle = "#ff9d4d";
+    ctx.fillText(f.m.toLocaleString("en-US"), W / 2, base + 82);
+    ctx.restore();
+  }
+
+  function drawCoin(o) {
+    // platinum: cool silver-white with a faint blue sheen, so coins never blend in with the warm lantern light
+    var g1 = "206,222,245", body = "#dde4ee", rim = "#ffffff", edge = "#7f8a9e";
+    if (G.neg) {
+      g1 = nsrc(206, 222, 245).join(","); body = "rgb(" + nsrc(221, 228, 238).join(",") + ")";
+      rim = "rgb(" + nsrc(255, 255, 255).join(",") + ")"; edge = "rgb(" + nsrc(127, 138, 158).join(",") + ")";
+    }
+    var pul = 0.5 + 0.5 * Math.sin(G.t * 5 + o.ph);
+    var g = ctx.createRadialGradient(o.x, o.y, 1, o.x, o.y, 24);
+    g.addColorStop(0, "rgba(" + g1 + "," + (0.5 + 0.2 * pul) + ")");
+    g.addColorStop(1, "rgba(" + g1 + ",0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(o.x, o.y, 24, 0, 6.283); ctx.fill();
+    var w = Math.max(1.5, Math.abs(Math.cos(G.t * 3.6 + o.ph)) * 7.5);
+    ctx.fillStyle = edge; ctx.beginPath(); ctx.ellipse(o.x, o.y, w + 1.2, 8.7, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(o.x, o.y, w, 7.5, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = rim; ctx.beginPath(); ctx.ellipse(o.x, o.y, w * 0.55, 4.2, 0, 0, 6.283); ctx.fill();
+    var tw = Math.max(0, Math.sin(G.t * 4 + o.ph * 2));
+    if (tw > 0.3) {
+      ctx.strokeStyle = rim; ctx.lineWidth = 1.2; ctx.globalAlpha = tw;
+      ctx.beginPath(); ctx.moveTo(o.x + 9, o.y - 11 - 4 * tw); ctx.lineTo(o.x + 9, o.y - 11 + 4 * tw); ctx.moveTo(o.x + 9 - 4 * tw, o.y - 11); ctx.lineTo(o.x + 9 + 4 * tw, o.y - 11); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function drawLantern(o) {
+    if (o.fairy) {
+      drawFairy(o.x + Math.sin(G.t * 9.1 + o.ph) * 5, o.y + Math.sin(G.t * 7.3 + o.ph) * 4 + Math.sin(G.t * 2) * 3, G.t, -1);
+      return;
+    }
+    if (o.coin) { drawCoin(o); return; }
+    var red = o.red;
+    if (o.lit === false) {
+      ctx.fillStyle = "#12172e";
+      ctx.beginPath(); ctx.ellipse(o.x, o.y, 8, 10, 0, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = "#8f9ad0"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(o.x, o.y, 8, 10, 0, 0, 6.283); ctx.stroke();
+      ctx.fillStyle = "#0a0d1e";
+      ctx.beginPath(); ctx.ellipse(o.x, o.y, 4, 6, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = "#6b75a8";
+      ctx.fillRect(o.x - 4, o.y - 13, 8, 3);
+      ctx.fillRect(o.x - 4, o.y + 10, 8, 3);
+      return;
+    }
+    var glow = "255,200,97", ga = 0.55, body = "#ffc861", inner = "#fff2cf", cap = "#3a2c14";
+    var gr = 34, bw = 8, bh = 10;
+    if (o.bonus) {
+      glow = "255,246,190"; ga = 0.7; body = "#fff0a8"; inner = "#ffffff"; cap = "#4a3a10";
+      gr = 40; bw = 9; bh = 11;
+    }
+    if (red) {
+      gr = 46; bw = 9.5; bh = 11.5;
+      ga = 0.65 * (0.75 + 0.25 * Math.sin(G.t * 6));
+      if (G.neg) {
+        // teal in the negative dimension, tuned so it still reads teal after the filter
+        glow = nsrc(40, 190, 170).join(",");
+        body = "rgb(" + nsrc(45, 175, 160).join(",") + ")";
+        inner = "rgb(" + nsrc(190, 245, 238).join(",") + ")";
+        cap = "rgb(" + nsrc(10, 60, 55).join(",") + ")";
+      } else {
+        glow = "255,60,90"; body = "#ff4a63"; inner = "#ffd2d8"; cap = "#3a1218";
+      }
+    }
+    var g = ctx.createRadialGradient(o.x, o.y, 2, o.x, o.y, gr);
+    g.addColorStop(0, "rgba(" + glow + "," + ga + ")");
+    g.addColorStop(1, "rgba(" + glow + ",0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(o.x, o.y, gr, 0, 6.283); ctx.fill();
+    ctx.fillStyle = body;
+    ctx.beginPath(); ctx.ellipse(o.x, o.y, bw, bh, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = inner;
+    ctx.beginPath(); ctx.ellipse(o.x, o.y, 4, 6, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = cap;
+    ctx.fillRect(o.x - 4, o.y - 14, 8, 3);
+    ctx.fillRect(o.x - 4, o.y + 11, 8, 3);
+    if (o.bonus) {
+      ctx.fillStyle = "#fff6c8";
+      for (var q = 0; q < 2; q++) {
+        var qa = G.t * 4 + q * Math.PI;
+        ctx.beginPath(); ctx.arc(o.x + Math.cos(qa) * 18, o.y + Math.sin(qa) * 18, 2.2, 0, 6.283); ctx.fill();
+      }
+    }
+  }
+
+  // a snapped web strand: the free end recoils and whips, then the whole thing drifts down and fades
+  function drawStrand(s) {
+    var N = 16, a = 0.38 * Math.max(0, 1 - s.t / 2.4);
+    if (a <= 0) return;
+    var recoil = 1 - 0.5 * (1 - Math.exp(-s.t * 7));
+    var whip = 14 * Math.exp(-s.t * 2.0);
+    var drift = s.t * 16;
+    ctx.strokeStyle = "rgba(200,205,235," + a + ")";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (var k = 0; k <= N; k++) {
+      var u = k / N;
+      var x = s.x + whip * u * Math.sin(s.t * 20 - u * 9 + s.ph) + Math.sin(s.t * 1.3 + u * 3 + s.ph) * 2 * Math.min(1, s.t);
+      var y = u * s.y1 * recoil + drift;
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  function drawSpider(o) {
+    var sc = o.s || 1;
+    if (!o.cut) {
+      ctx.strokeStyle = "rgba(200,205,235,0.35)";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(o.x, 0); ctx.lineTo(o.x, o.y); ctx.stroke();
+    }
+    ctx.save();
+    ctx.translate(o.x, o.y); ctx.scale(sc, sc); ctx.translate(-o.x, -o.y);
+    ctx.strokeStyle = "#c9a8ff";
+    ctx.lineWidth = 1.6;
+    for (var s = -1; s <= 1; s += 2) {
+      for (var k = 0; k < 4; k++) {
+        var a = (k - 1.5) * 0.55, w = Math.sin(G.t * 10 + k) * 2;
+        ctx.beginPath();
+        ctx.moveTo(o.x, o.y);
+        ctx.lineTo(o.x + s * 12, o.y + a * 12 + w);
+        ctx.lineTo(o.x + s * 17, o.y + a * 20 + 6);
+        ctx.stroke();
+      }
+    }
+    ctx.fillStyle = "#7d5bd6";
+    ctx.beginPath(); ctx.arc(o.x, o.y, 9, 0, 6.283); ctx.fill();
+    ctx.fillStyle = "#ff6179";
+    ctx.fillRect(o.x - 4, o.y - 3, 2, 2);
+    ctx.fillRect(o.x + 2, o.y - 3, 2, 2);
+    ctx.restore();
+  }
+
+  // The Weaver hangs head-down: abdomen on top where the threads attach, head and fangs below facing the moth.
+  var BOSS_MOUTH = 44; // where shots leave him, below the centre of his body
+  var BOSS_ANCHORS = [-150, -78, 4, 82, 148]; // where his five threads meet the sky, relative to the middle of the screen
+  function drawBoss(e) {
+    var x = e.bx, y = e.by, k, s, a, w, ax = x, ay = y - 40, jx = x, jy = ay - 36;
+    var hx = x, hy = y + 22;
+    // five threads spread from the top and gather into one line just above him
+    ctx.strokeStyle = "rgba(200,205,235,0.4)"; ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    for (k = 0; k < BOSS_ANCHORS.length; k++) {
+      var tx = W / 2 + BOSS_ANCHORS[k];
+      ctx.moveTo(tx, -4);
+      ctx.quadraticCurveTo(tx + (jx - tx) * 0.45, Math.max(0, jy) * 0.62 + 6, jx, jy);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(210,215,240,0.6)"; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(jx, jy); ctx.lineTo(ax, ay); ctx.stroke();
+    ctx.fillStyle = "rgba(220,224,245,0.75)"; ctx.beginPath(); ctx.arc(jx, jy, 2.2, 0, 6.283); ctx.fill();
+    // glow
+    var gl = ctx.createRadialGradient(x, y + 6, 6, x, y + 6, 86);
+    gl.addColorStop(0, "rgba(165,131,240," + (0.25 + e.pulse * 0.4) + ")");
+    gl.addColorStop(1, "rgba(165,131,240,0)");
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x, y + 6, 86, 0, 6.283); ctx.fill();
+    // legs come from the head end and arch outwards
+    ctx.strokeStyle = "#a583f0"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (s = -1; s <= 1; s += 2) {
+      for (k = 0; k < 4; k++) {
+        a = (k - 1.5) * 0.6; w = Math.sin(G.t * 4 + k * 1.3) * 5;
+        ctx.beginPath();
+        ctx.moveTo(hx, hy - 4);
+        ctx.lineTo(hx + s * 34, hy - 4 + a * 26 - 14 + w);
+        ctx.lineTo(hx + s * 54, hy - 4 + a * 44 + 18 + w);
+        ctx.stroke();
+      }
+    }
+    ctx.lineCap = "butt";
+    // abdomen (top), with a darker chevron marking
+    ctx.fillStyle = "#6a49c4"; ctx.beginPath(); ctx.ellipse(x, y - 12, 28, 31, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = "#57399f";
+    ctx.beginPath(); ctx.moveTo(x - 12, y - 28); ctx.lineTo(x, y - 18); ctx.lineTo(x + 12, y - 28); ctx.lineTo(x + 12, y - 22); ctx.lineTo(x, y - 12); ctx.lineTo(x - 12, y - 22); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x - 9, y - 10); ctx.lineTo(x, y - 2); ctx.lineTo(x + 9, y - 10); ctx.lineTo(x + 9, y - 5); ctx.lineTo(x, y + 3); ctx.lineTo(x - 9, y - 5); ctx.closePath(); ctx.fill();
+    // head (below), with fangs at the bottom
+    ctx.fillStyle = "#4b3392"; ctx.beginPath(); ctx.ellipse(hx, hy, 18, 17, 0, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = "#3a2775"; ctx.lineWidth = 3.2; ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(hx - 5, hy + 13); ctx.quadraticCurveTo(hx - 7, hy + 20, hx - 3, hy + 23);
+    ctx.moveTo(hx + 5, hy + 13); ctx.quadraticCurveTo(hx + 7, hy + 20, hx + 3, hy + 23);
+    ctx.stroke(); ctx.lineCap = "butt";
+    // eight eyes facing down at the moth: a lower row with two big centre eyes, an upper row of four smaller ones
+    var lit = e.pulse > 0.2 || G.stuck <= 0;
+    ctx.fillStyle = lit ? "#ff6179" : "#7a6aa8";
+    var EYES = [[-7, 3, 6], [1, 3, 6], [-13, 0, 3.5], [9.5, 0, 3.5], [-9, -6, 4], [5, -6, 4], [-15, -9, 2.6], [12.4, -9, 2.6]];
+    for (k = 0; k < EYES.length; k++) ctx.fillRect(hx + EYES[k][0], hy + EYES[k][1], EYES[k][2], EYES[k][2]);
+    if (lit) { ctx.fillStyle = "#ffd2d8"; ctx.fillRect(hx - 6, hy + 4, 1.6, 1.6); ctx.fillRect(hx + 2, hy + 4, 1.6, 1.6); }
+  }
+  // The Weaver's shot: a corner web flying apex-first. Spokes fan forward from the apex, catching threads sag between
+  // them, and the two edge threads hook inward at their tips. WEB is shared by the drawing and the hitbox so they always match.
+  // Spokes are deliberately uneven (angles, lengths, ring spacing and slant all differ per gap) so it reads like a real
+  // corner web rather than a stamped pattern; each shot is randomly mirrored too. Sizes are 1.5x the v2.37 shot.
+  var WEB = {
+    ax: -24, R: 45, th: 0.66, curl: 10.5,
+    spokes: [[-0.66, 1.0], [-0.31, 0.93], [0.03, 0.98], [0.37, 0.9], [0.66, 0.96]], // [angle, length as a share of R]
+    gaps: [ // catching threads in each gap between spokes: ring radii, how far they sag, how much they slant
+      { r: [0.18, 0.3, 0.42, 0.54, 0.66, 0.78, 0.89], sag: 0.8, sl: 0.05 },
+      { r: [0.24, 0.39, 0.53, 0.67, 0.8], sag: 0.84, sl: -0.04 },
+      { r: [0.2, 0.33, 0.47, 0.61, 0.74, 0.86], sag: 0.78, sl: 0.06 },
+      { r: [0.27, 0.43, 0.59, 0.74, 0.86], sag: 0.83, sl: -0.03 }
+    ]
+  };
+  var MOTH_HIT = 9; // the moth's body radius, the same allowance spiders use
+  function webPath() {
+    var R = WEB.R, sp = WEB.spokes, k, i, a, a1, L0, L1, r, r1, g, sd, ex, ey, th;
+    ctx.beginPath();
+    for (k = 0; k < sp.length; k++) {
+      a = sp[k][0]; ex = Math.cos(a) * R * sp[k][1]; ey = Math.sin(a) * R * sp[k][1];
+      ctx.moveTo(0, 0); ctx.lineTo(ex, ey);
+      if (k === 0 || k === sp.length - 1) {
+        // the two edge threads hook inward at their tips
+        sd = k === 0 ? -1 : 1; th = Math.abs(a); L0 = R * sp[k][1];
+        ctx.quadraticCurveTo(Math.cos(th) * (L0 + WEB.curl), Math.sin(th) * (L0 + WEB.curl) * sd,
+          Math.cos(th * 0.35) * (L0 + WEB.curl * 0.9), Math.sin(th * 0.35) * (L0 + WEB.curl * 0.9) * sd);
+      }
+    }
+    for (k = 0; k < WEB.gaps.length; k++) {
+      g = WEB.gaps[k]; a = sp[k][0]; a1 = sp[k + 1][0]; L0 = sp[k][1] * R; L1 = sp[k + 1][1] * R;
+      for (i = 0; i < g.r.length; i++) {
+        r = Math.min(L0, g.r[i] * R); r1 = Math.min(L1, g.r[i] * R * (1 + g.sl));
+        ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        ctx.quadraticCurveTo(Math.cos((a + a1) / 2) * (r + r1) / 2 * g.sag, Math.sin((a + a1) / 2) * (r + r1) / 2 * g.sag, Math.cos(a1) * r1, Math.sin(a1) * r1);
+      }
+    }
+  }
+  // the tip (apex) leads, pointed at the moth; the fan and its curled edges trail behind it
+  function drawWebBullet(o) {
+    ctx.save();
+    ctx.translate(o.x, o.y); ctx.rotate(Math.atan2(o.vy, o.vx) + Math.PI); ctx.translate(WEB.ax, 0);
+    ctx.scale(1, o.flip || 1);
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    webPath();
+    ctx.strokeStyle = "rgba(190,200,255,0.22)"; ctx.lineWidth = 4.2; ctx.stroke(); // soft glow so it reads against the dark
+    ctx.strokeStyle = "#eef0fb"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = "#eef0fb"; ctx.beginPath(); ctx.arc(0, 0, 2.4, 0, 6.283); ctx.fill();
+    ctx.restore();
+  }
+  // true when the moth touches the web as drawn: the fan of spokes out to the curled tips, plus the moth's own radius
+  function webHit(w) {
+    var ang = Math.atan2(w.vy, w.vx) + Math.PI, c = Math.cos(ang), sn = Math.sin(ang); // same frame as the drawing
+    var dx = G.mx - w.x, dy = MY - w.y;
+    var lx = dx * c + dy * sn - WEB.ax, ly = Math.abs(-dx * sn + dy * c);
+    var reach = WEB.R + WEB.curl * 0.6, d, t, ex = Math.cos(WEB.th), ey = Math.sin(WEB.th);
+    if (Math.atan2(ly, lx) <= WEB.th) d = Math.max(0, Math.sqrt(lx * lx + ly * ly) - reach);
+    else { t = Math.max(0, Math.min(reach, lx * ex + ly * ey)); d = Math.sqrt((lx - ex * t) * (lx - ex * t) + (ly - ey * t) * (ly - ey * t)); }
+    return d < MOTH_HIT;
+  }
+  function drawWeb(x, y, r, a) {
+    var k;
+    ctx.save();
+    ctx.translate(x, y); ctx.globalAlpha = a;
+    ctx.strokeStyle = "#eef0ff"; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (k = 0; k < 8; k++) { ctx.moveTo(0, 0); ctx.lineTo(Math.cos(k * 0.785) * r, Math.sin(k * 0.785) * r); }
+    ctx.stroke();
+    for (var ring = 1; ring <= 2; ring++) {
+      ctx.beginPath();
+      for (k = 0; k <= 8; k++) {
+        var rr = r * ring / 2 * (k % 2 ? 0.88 : 1);
+        ctx.lineTo(Math.cos(k * 0.785) * rr, Math.sin(k * 0.785) * rr);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function slimePath(hw, hh) {
+    ctx.beginPath();
+    ctx.moveTo(-hw, hh * 0.8);
+    ctx.bezierCurveTo(-hw * 1.06, -hh * 0.25, -hw * 0.62, -hh, 0, -hh);
+    ctx.bezierCurveTo(hw * 0.62, -hh, hw * 1.06, -hh * 0.25, hw, hh * 0.8);
+    ctx.quadraticCurveTo(hw * 0.98, hh, hw * 0.78, hh);
+    ctx.lineTo(-hw * 0.78, hh);
+    ctx.quadraticCurveTo(-hw * 0.98, hh, -hw, hh * 0.8);
+    ctx.closePath();
+  }
+  // a Terraria-style slime: a wobbling translucent dome with a shine and two beady eyes. sc < 1 and far draw a distant one.
+  function drawSlimeShape(x, y, c, ph, sc, far) {
+    var S = SLIMES[c], k = Math.sin(G.t * 7 + ph) * (reduce ? 0 : 0.07), hw = S.w / 2 * sc * (1 + k), hh = S.h / 2 * sc * (1 - k);
+    ctx.save();
+    ctx.translate(x, y + S.h / 2 * sc * k);
+    slimePath(hw, hh);
+    var g = ctx.createLinearGradient(0, -hh, 0, hh);
+    g.addColorStop(0, S.light); g.addColorStop(0.45, S.body); g.addColorStop(1, S.dark);
+    ctx.globalAlpha *= far ? 1 : 0.9;
+    ctx.fillStyle = g; ctx.fill();
+    if (!far) {
+      ctx.strokeStyle = S.dark; ctx.lineWidth = 1.6; ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.65)";
+      ctx.beginPath(); ctx.ellipse(-hw * 0.42, -hh * 0.45, hw * 0.2, hh * 0.15, -0.6, 0, 6.283); ctx.fill();
+    }
+    ctx.fillStyle = "#101018";
+    ctx.beginPath(); ctx.ellipse(-hw * 0.3, -hh * 0.02, hw * 0.1, hh * 0.17, 0, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(hw * 0.3, -hh * 0.02, hw * 0.1, hh * 0.17, 0, 0, 6.283); ctx.fill();
+    if (!far) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(-hw * 0.33, -hh * 0.14, Math.max(1, hw * 0.06), Math.max(1, hw * 0.06));
+      ctx.fillRect(hw * 0.27, -hh * 0.14, Math.max(1, hw * 0.06), Math.max(1, hw * 0.06));
+    }
+    ctx.restore();
+  }
+  function drawSlime(o) { drawSlimeShape(o.x, o.y, o.c, o.ph, 1, false); }
+  function drawBat(o) {
+    var f = Math.sin(G.t * 16 + o.ph);
+    ctx.fillStyle = "#4a3a8c";
+    for (var s = -1; s <= 1; s += 2) {
+      ctx.beginPath();
+      ctx.moveTo(o.x, o.y);
+      ctx.quadraticCurveTo(o.x + s * 14, o.y - 14 - f * 8, o.x + s * 24, o.y - f * 10);
+      ctx.quadraticCurveTo(o.x + s * 16, o.y + 2, o.x + s * 12, o.y + 5);
+      ctx.quadraticCurveTo(o.x + s * 6, o.y + 1, o.x, o.y + 6);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = "#2c2260";
+    ctx.beginPath(); ctx.arc(o.x, o.y + 1, 6, 0, 6.283); ctx.fill();
+    ctx.fillStyle = "#ff6179";
+    ctx.fillRect(o.x - 3, o.y - 1, 2, 2);
+    ctx.fillRect(o.x + 1, o.y - 1, 2, 2);
+  }
+
+  // moth skins. "" is the starting moth: the Hebrew Character moth (Orthosia gothica), with grey-brown forewings,
+  // paler hindwings, a pale ringed orbicular and kidney mark on each forewing with the black saddle "letter" between them,
+  // and a furry thorax
+  var MOTH_SKINS = {
+    "": { wing: "#9c8670", wing2: "#bcb0a2", body: "#4f3d2d", gl: "255,214,165", hebrew: true },
+    moon: { wing: "#cfe0ff", wing2: "#9db4e8", body: "#35406b", gl: "170,205,255" },
+    // Polygrammate moth (Polygrammate hebraeicum): white forewings scribbled with black script-like marks and a dotted edge,
+    // silky white hindwings with a grey fringe, a white furry body with black spots, grey antennae
+    poly: { wing: "#f6f6f3", wing2: "#ecebe6", body: "#f1f0eb", gl: "228,236,252", poly: true, ant: "#8f8a84" }
+  };
+  function polyMarks() {
+    ctx.save();
+    ctx.translate(10, -5); ctx.rotate(-0.5);
+    ctx.strokeStyle = "#141418"; ctx.lineWidth = 0.95; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(-8.5, -1.5); ctx.quadraticCurveTo(-6.6, -3.6, -4.6, -1.4);
+    ctx.moveTo(-6.2, 2.6); ctx.lineTo(-4.4, 1.0); ctx.lineTo(-2.8, 2.6);
+    ctx.moveTo(-1.6, -4.4); ctx.quadraticCurveTo(0.2, -2.6, -1.2, -0.6);
+    ctx.moveTo(0.4, 1.4); ctx.quadraticCurveTo(2.4, 3.4, 4.2, 1.0);
+    ctx.moveTo(3.2, -3.8); ctx.lineTo(4.8, -2.2); ctx.lineTo(6.4, -3.8);
+    ctx.moveTo(6.8, 0.8); ctx.quadraticCurveTo(8.4, -0.6, 9.4, 1.0);
+    ctx.moveTo(-3.2, 4.6); ctx.lineTo(-1.8, 3.6);
+    ctx.moveTo(1.6, -0.6); ctx.lineTo(2.6, -1.4);
+    ctx.stroke();
+    ctx.fillStyle = "#141418"; // dotted outer margin
+    for (var a = -1.9; a <= 1.95; a += 0.38) { ctx.beginPath(); ctx.arc(Math.cos(a) * 10.8, Math.sin(a) * 6.1, 0.55, 0, 6.283); ctx.fill(); }
+    ctx.restore();
+  }
+  function hebrewMarks() {
+    // drawn in the forewing's own space (same transform the forewing ellipse uses), so it mirrors and flaps with it
+    var pale = "rgba(236,222,198,0.85)";
+    ctx.save();
+    ctx.translate(10, -5); ctx.rotate(-0.5);
+    ctx.strokeStyle = "rgba(236,222,198,0.45)"; ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.ellipse(0, 0, 9.6, 5.2, 0, -2.6, 2.6); ctx.stroke(); // pale outer band along the wing edge
+    ctx.fillStyle = "#1c130d"; // the black "Hebrew letter": a saddle wedge between the two stigmata
+    ctx.beginPath();
+    ctx.moveTo(-2.6, 0.2); ctx.quadraticCurveTo(-0.3, 3.9, 2.4, 0.4);
+    ctx.lineTo(1.5, -0.8); ctx.quadraticCurveTo(-0.3, 1.7, -1.6, -0.9);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = pale; ctx.lineWidth = 0.75;
+    ctx.beginPath(); ctx.ellipse(-3.6, -0.6, 1.7, 1.4, 0, 0, 6.283); ctx.stroke(); // orbicular stigma
+    ctx.beginPath(); ctx.ellipse(3.7, -0.7, 1.5, 2.2, 0.25, 0, 6.283); ctx.stroke(); // kidney (reniform) stigma
+    ctx.restore();
+  }
+  function drawMoth(x, y, light, t, sk) {
+    if (sk === undefined) sk = shop.wear;
+    var P = MOTH_SKINS[sk] || MOTH_SKINS[""];
+    var wing = P.wing, wing2 = P.wing2, bodyc = P.body, gl = P.gl;
+    var R = 24 + light * 0.5;
+    var g = ctx.createRadialGradient(x, y, 2, x, y, R);
+    g.addColorStop(0, "rgba(" + gl + "," + (0.15 + light / 160) + ")");
+    g.addColorStop(1, "rgba(255,230,170,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, R, 0, 6.283); ctx.fill();
+    var flap = 0.55 + Math.abs(Math.sin(t * 18)) * 0.45;
+    ctx.fillStyle = wing;
+    for (var s = -1; s <= 1; s += 2) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(s * flap, 1);
+      ctx.beginPath(); ctx.ellipse(10, -5, 12, 7, -0.5, 0, 6.283); ctx.fill();
+      if (P.hebrew) hebrewMarks();
+      if (P.poly) polyMarks();
+      ctx.fillStyle = wing2;
+      ctx.beginPath(); ctx.ellipse(8, 6, 8, 5, 0.5, 0, 6.283); ctx.fill();
+      if (P.poly) { ctx.strokeStyle = "rgba(150,148,156,0.75)"; ctx.lineWidth = 0.8; ctx.stroke(); } // grey hindwing fringe
+      ctx.fillStyle = wing;
+      ctx.restore();
+    }
+    ctx.fillStyle = bodyc;
+    ctx.beginPath(); ctx.ellipse(x, y, 2.6, 8, 0, 0, 6.283); ctx.fill();
+    if (P.hebrew) {
+      ctx.fillStyle = "#8a745e"; ctx.beginPath(); ctx.ellipse(x, y - 3.5, 3.3, 3.6, 0, 0, 6.283); ctx.fill(); // furry thorax
+      ctx.fillStyle = "#6b5643"; ctx.beginPath(); ctx.ellipse(x, y - 2.6, 1.4, 1.8, 0, 0, 6.283); ctx.fill();
+    }
+    if (P.poly) {
+      ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.ellipse(x, y - 3.5, 3.3, 3.6, 0, 0, 6.283); ctx.fill(); // furry white thorax
+      ctx.fillStyle = "#141418";
+      [[0, -4.6], [-1.4, -2.6], [1.4, -2.6], [0, 2], [0, 4.8]].forEach(function (d) { ctx.beginPath(); ctx.arc(x + d[0], y + d[1], 0.65, 0, 6.283); ctx.fill(); });
+    }
+    ctx.strokeStyle = P.ant || bodyc; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x - 1, y - 7); ctx.lineTo(x - 5, y - 14); ctx.moveTo(x + 1, y - 7); ctx.lineTo(x + 5, y - 14); ctx.stroke();
+  }
+
+  function drawGather() {
+    if (!G.rb) return;
+    var rb = G.rb, k = Math.min(1, rb.t / 1.8), R = 30 + k * 70, i, p, x, y, a;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    var g = ctx.createRadialGradient(G.mx, MY, 2, G.mx, MY, R);
+    g.addColorStop(0, "rgba(255,244,214," + (0.25 + k * 0.65) + ")");
+    g.addColorStop(1, "rgba(255,200,97,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(G.mx, MY, R, 0, 6.283); ctx.fill();
+    ctx.lineWidth = 1;
+    for (i = 0; i < G.gather.length; i++) {
+      p = G.gather[i];
+      a = Math.max(0.15, Math.min(1, (360 - p.r) / 140));
+      x = G.mx + Math.cos(p.a) * p.r;
+      y = MY + Math.sin(p.a) * p.r;
+      ctx.strokeStyle = "rgba(255,226,150," + (a * 0.55) + ")";
+      ctx.beginPath();
+      ctx.moveTo(G.mx + Math.cos(p.a - 0.2) * (p.r + 12), MY + Math.sin(p.a - 0.2) * (p.r + 12));
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,240,200," + a + ")";
+      ctx.fillRect(x - p.s / 2, y - p.s / 2, p.s, p.s);
+    }
+    ctx.restore();
+  }
+
+  function draw() {
+    var i, o, y;
+    ctx.setTransform(SC, 0, 0, SC, 0, 0);
+    var vis = G.rb ? Math.min(100, G.rb.t / 1.8 * 100) : G.light;
+    ctx.save();
+    if (G.shake > 0) ctx.translate(rand(-3, 3), rand(-3, 3));
+    var bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#0b1020");
+    bg.addColorStop(1, "#1d2850");
+    ctx.fillStyle = bg;
+    ctx.fillRect(-5, -5, W + 10, H + 10);
+
+    // scrolling backdrop: soft clouds, then stars in front of them
+    for (i = 0; i < clouds.length; i++) {
+      o = clouds[i];
+      y = ((o.f * (H + 300) + G.scroll * o.z) % (H + 300)) - 150;
+      ctx.save();
+      ctx.translate(o.x, y);
+      ctx.scale(1, o.ry / o.rx);
+      var cg = ctx.createRadialGradient(0, 0, 0, 0, 0, o.rx);
+      cg.addColorStop(0, "rgba(" + o.c + "," + o.a + ")");
+      cg.addColorStop(1, "rgba(" + o.c + ",0)");
+      ctx.fillStyle = cg;
+      ctx.beginPath(); ctx.arc(0, 0, o.rx, 0, 6.283); ctx.fill();
+      ctx.restore();
+    }
+    for (i = 0; i < stars.length; i++) {
+      o = stars[i];
+      y = (o.f * H + G.scroll * o.z) % H;
+      ctx.globalAlpha = 0.35 + 0.35 * Math.sin(G.t * 1.5 + o.p) * (reduce ? 0 : 1);
+      ctx.fillStyle = "#dfe3ff";
+      ctx.beginPath(); ctx.arc(o.x, y, o.r, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // distant slimes behind everything else, dimmed and small so they never read as real threats
+    for (i = 0; i < G.bgs.length; i++) { o = G.bgs[i]; ctx.globalAlpha = o.a; drawSlimeShape(o.x, o.y, o.c, o.ph, o.s, true); }
+    ctx.globalAlpha = 1;
+    for (i = 0; i < G.strands.length; i++) drawStrand(G.strands[i]);
+    for (i = 0; i < G.haz.length; i++) {
+      o = G.haz[i];
+      if (o.type === "spider") drawSpider(o); else if (o.type === "slime") drawSlime(o); else drawBat(o);
+    }
+
+    // darkness closes in as the glow fades
+    var R0 = 50 + vis * 1.3;
+    var dk = ctx.createRadialGradient(G.mx, MY, R0 * 0.4, G.mx, MY, R0 + 190);
+    dk.addColorStop(0, "rgba(5,7,16,0)");
+    dk.addColorStop(1, "rgba(5,7,16," + (0.55 + (1 - vis / 100) * 0.3) + ")");
+    ctx.fillStyle = dk;
+    ctx.fillRect(-5, -5, W + 10, H + 10);
+
+    if (G.sd) {
+      var pl = 0.5 + 0.5 * Math.sin(G.t * 5);
+      var rg = ctx.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.75);
+      rg.addColorStop(0, "rgba(180,10,40,0)");
+      rg.addColorStop(1, "rgba(180,10,40," + (0.28 + 0.14 * pl) + ")");
+      ctx.fillStyle = rg;
+      ctx.fillRect(-5, -5, W + 10, H + 10);
+    }
+
+    if (G.ev && G.ev.type === "boss") drawBoss(G.ev);
+    for (i = 0; i < G.webs.length; i++) {
+      o = G.webs[i];
+      if (o.glob) {
+        var gw = 1 + 0.15 * Math.sin(G.t * 25 + i);
+        var gg = ctx.createRadialGradient(o.x, o.y, 1, o.x, o.y, 24);
+        gg.addColorStop(0, "rgba(140,255,90,0.7)"); gg.addColorStop(1, "rgba(140,255,90,0)");
+        ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(o.x, o.y, 24, 0, 6.283); ctx.fill();
+        ctx.strokeStyle = "rgba(120,230,80,0.35)"; ctx.lineWidth = 7; ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x - o.vx * 0.04, o.y - o.vy * 0.04); ctx.stroke();
+        ctx.lineCap = "butt";
+        ctx.fillStyle = "#5fd13a"; ctx.beginPath(); ctx.ellipse(o.x, o.y, 11 * gw, 11 / gw, 0, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#c8ff9e"; ctx.beginPath(); ctx.arc(o.x - 3, o.y - 3, 3.2, 0, 6.283); ctx.fill();
+        continue;
+      }
+      drawWebBullet(o);
+    }
+    if (G.fl) drawLights(G.fl);
+    for (i = 0; i < G.items.length; i++) drawLantern(G.items[i]);
+    if (G.tut && T && !T.talk) {
+      var pul = 0.5 + 0.5 * Math.sin(G.t * 6);
+      if (T.hint && G.items.indexOf(T.hint) >= 0) {
+        ctx.strokeStyle = "rgba(255,242,207," + (0.35 + 0.4 * pul) + ")";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(T.hint.x, T.hint.y, 26 + pul * 4, 0, 6.283); ctx.stroke();
+      }
+      if (T.hintMove) {
+        var hx = G.mx, hs = 42 + pul * 6;
+        ctx.fillStyle = "rgba(255,226,150," + (0.35 + 0.45 * pul) + ")";
+        ctx.beginPath(); ctx.moveTo(hx - hs, MY); ctx.lineTo(hx - hs + 12, MY - 8); ctx.lineTo(hx - hs + 12, MY + 8); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(hx + hs, MY); ctx.lineTo(hx + hs - 12, MY - 8); ctx.lineTo(hx + hs - 12, MY + 8); ctx.closePath(); ctx.fill();
+      }
+    }
+    for (i = 0; i < G.pops.length; i++) {
+      o = G.pops[i];
+      ctx.globalAlpha = Math.max(0, 1 - o.t / 1.1);
+      ctx.font = "700 13px 'DM Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillStyle = o.c;
+      ctx.fillText(o.text, o.x, o.y - o.t * 30);
+    }
+    ctx.globalAlpha = 1;
+
+    for (i = 0; i < G.parts.length; i++) {
+      o = G.parts[i];
+      ctx.globalAlpha = Math.max(0, o.life / o.max);
+      ctx.fillStyle = o.c;
+      ctx.fillRect(o.x - 1.5, o.y - 1.5, 3, 3);
+    }
+    ctx.globalAlpha = 1;
+
+    if (!(G.inv > 0 && Math.floor(G.inv * 14) % 2 === 0)) {
+      if (G.stuck > 0) {
+        // caught in a web: the moth thrashes and twists, trying to tug free
+        var wx = G.mx + Math.sin(G.t * 52) * 3, wy = MY + Math.sin(G.t * 37 + 1) * 1.5;
+        ctx.save();
+        ctx.translate(wx, wy); ctx.rotate(Math.sin(G.t * 31) * 0.28); ctx.translate(-wx, -wy);
+        drawMoth(wx, wy, vis, G.t * 2.2);
+        ctx.restore();
+        drawWeb(wx, wy, 26, 0.75);
+      } else drawMoth(G.mx, MY, vis, G.t);
+    }
+    if (F && G.tut) { var fq = fairyPos(); drawFairy(fq.x, fq.y, F.t, F.face >= 0 ? 1 : -1); }
+    drawGather();
+
+    if (state === "play" && G.streak > 1) {
+      ctx.font = "500 17px 'DM Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ffd98a";
+      ctx.fillText("Streak x" + G.streak, W / 2, H - 18);
+    }
+    if (G.neg) {
+      ctx.font = "500 11px 'DM Mono', monospace";
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#ffd98a";
+      ctx.fillText("NEGATIVE MOTH", W - 12, TOP + 18);
+    }
+    if (G.sd) {
+      ctx.font = "800 15px Syne, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ff6179";
+      ctx.fillText("SUDDEN DEATH  " + Math.ceil(G.sd.dur - G.sd.t), W / 2, TOP + 24);
+      ctx.fillRect(60, TOP + 32, (W - 120) * Math.max(0, 1 - G.sd.t / G.sd.dur), 3);
+    }
+    if (G.ev && !G.ev.leave) {
+      ctx.font = "800 15px Syne, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = G.ev.type === "slime" ? "#8be880" : "#c9a8ff";
+      ctx.fillText((G.ev.type === "boss" ? "THE WEAVER  " : (G.ev.type === "slime" ? "SLIME RAIN  " : "ITSY-BITSY SPIDER  ")) + Math.max(0, Math.ceil(G.ev.dur - G.ev.t)), W / 2, TOP + 24);
+      ctx.fillRect(60, TOP + 32, (W - 120) * Math.max(0, 1 - G.ev.t / G.ev.dur), 3);
+    }
+    if (G.banner > 0) {
+      ctx.globalAlpha = Math.min(1, G.banner);
+      var bty = 165 - (1.8 - G.banner) * 12, tf = 38, words, line, lines, wi, test;
+      ctx.textAlign = "center";
+      ctx.font = "800 " + tf + "px Syne, sans-serif";
+      while (tf > 20 && ctx.measureText(G.bt).width > W - 60) { tf -= 2; ctx.font = "800 " + tf + "px Syne, sans-serif"; }
+      ctx.fillStyle = "#ffe3a3";
+      ctx.fillText(G.bt, W / 2, bty);
+      // the subtitle wraps onto extra lines when a narrow window can't hold it
+      ctx.font = "500 13px 'DM Mono', monospace";
+      ctx.fillStyle = "#e9e7f2";
+      words = String(G.bs).split(" "); line = ""; lines = [];
+      for (wi = 0; wi < words.length; wi++) {
+        test = line ? line + " " + words[wi] : words[wi];
+        if (line && ctx.measureText(test).width > W - 70) { lines.push(line); line = words[wi]; } else line = test;
+      }
+      lines.push(line);
+      for (wi = 0; wi < lines.length; wi++) ctx.fillText(lines[wi], W / 2, bty + 26 + wi * 17);
+      ctx.globalAlpha = 1;
+    }
+    if (G.shout) {
+      var sh = G.shout;
+      var pop = 1 + 0.18 * Math.max(0, 1 - sh.t * 6);
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, (1.8 - sh.t) / 0.4));
+      ctx.translate(W / 2, H * 0.55);
+      ctx.scale(pop, pop);
+      ctx.font = "800 30px Syne, sans-serif";
+      ctx.textAlign = "center";
+      var tw = ctx.measureText(sh.text).width;
+      if (tw > 360) ctx.font = "800 " + Math.floor(30 * 360 / tw) + "px Syne, sans-serif";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 5;
+      // teal in the negative dimension, tuned to survive the filter
+      ctx.strokeStyle = G.neg ? "rgba(" + nsrc(8, 45, 45).join(",") + ",0.85)" : "rgba(26,5,9,0.85)";
+      ctx.strokeText(sh.text, 0, 0);
+      ctx.fillStyle = G.neg ? "rgb(" + nsrc(70, 215, 195).join(",") + ")" : "#ff6179";
+      ctx.fillText(sh.text, 0, 0);
+      ctx.restore();
+    }
+    if (G.rb && G.rb.t > 1.7) {
+      var e = Math.min(1, (G.rb.t - 1.7) / 0.45) * (W + 200);
+      ctx.fillStyle = "rgba(255,244,214,0.96)";
+      ctx.fillRect(-5, -5, Math.max(0, e - 200) + 5, H + 10);
+      var sg = ctx.createLinearGradient(e - 200, 0, e, 0);
+      sg.addColorStop(0, "rgba(255,244,214,0.96)");
+      sg.addColorStop(1, "rgba(255,244,214,0)");
+      ctx.fillStyle = sg;
+      ctx.fillRect(e - 200, -5, 200, H + 10);
+    }
+    if (G.flash > 0) {
+      ctx.fillStyle = "rgba(255,244,214," + Math.min(0.96, G.flash * 0.96) + ")";
+      ctx.fillRect(-5, -5, W + 10, H + 10);
+    }
+    ctx.restore();
+  }
+
+  var shown = { s: -1, v: -1, g: "", l: -1, r: -1, p: null, d: null };
+  function hud() {
+    var pl = state === "paused", pd = !(state === "play" || state === "paused");
+    if (pl !== shown.p) { elPause.setAttribute("aria-pressed", pl ? "true" : "false"); elPause.title = pl ? "Resume (P)" : "Pause (P)"; shown.p = pl; }
+    if (pd !== shown.d) { elPause.disabled = pd; shown.d = pd; }
+    var s = Math.floor(G.score);
+    if (s !== shown.s) { elScore.textContent = fmt(s); shown.s = s; }
+    if (G.level !== shown.v) { elLevel.textContent = G.level; shown.v = G.level; }
+    if (G.lives !== shown.r) { elLives.textContent = G.lives; shown.r = G.lives; }
+    var gs = G.got + "/" + need(G.level);
+    if (gs !== shown.g) { elLant.textContent = gs; elLantFill.style.transform = "scaleX(" + Math.min(1, G.got / need(G.level)) + ")"; shown.g = gs; }
+    var l = Math.round(G.light);
+    if (l !== shown.l) {
+      elFill.style.transform = "scaleX(" + (Math.max(0, G.light) / 100) + ")";
+      elMeter.classList.toggle("low", l < 30);
+      elMeter.setAttribute("aria-valuenow", l);
+      shown.l = l;
+    }
+  }
+
+  function frame(now) {
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (state === "play") update(dt);
+    else if (state !== "paused") { G.t += dt * 0.5; G.scroll += 8 * dt; }
+    draw();
+    hud();
+    mixSet(state === "play" ? (G.rb ? Math.min(100, G.rb.t / 1.8 * 100) : G.light) : 100);
+    requestAnimationFrame(frame);
+  }
+  last = performance.now();
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>
