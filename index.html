@@ -1,6 +1,7 @@
 <!doctype html>
 <!--
-  Lantern Moth v2.41
+  Lantern Moth v2.42
+  v2.42: calmer Itsy-Bitsy spawns; Weaver shots outlive him; web traps (longer, harder to escape) bring venom-only fire; gentler Lumi in the shop.
   v2.41: online leaderboard (All-time / This week / My runs) backed by the Cloudflare score server in worker/.
   v2.40: iPhone fixes: a clear message when the game is opened somewhere JavaScript can't run (Files / Quick Look previews),
          an on-screen error report if anything fails to load, and a layout fallback for iOS 15 and older.
@@ -329,7 +330,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       <div class="meter" id="meter" role="meter" aria-label="Glow" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="meterfill"></i></div>
     </div>
     <div class="card" id="card">
-      <p class="eyebrow">Lantern Moth <span class="ver">- v2.41</span></p>
+      <p class="eyebrow">Lantern Moth <span class="ver">- v2.42</span></p>
       <h2 id="ctitle">Keep the glow alive</h2>
       <p id="cbody">Fly into lanterns to refill your light and dodge the spiders. Catch enough lanterns to level up. Every tenth level earns a rebirth, a second chance when your glow goes out.</p>
       <p class="keys" id="ckeys">Arrow keys or A / D to steer. On a touch screen, drag. P or Esc pauses. New here? Try the tutorial.</p>
@@ -477,7 +478,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // shining coins: a rare drop from level 10, kept across runs for a future shop
-  var VERSION = "2.41";
+  var VERSION = "2.42";
   Array.prototype.forEach.call(document.querySelectorAll(".ver"), function (el) { el.textContent = "- v" + VERSION; });
   var coins = 0;
   try { coins = parseInt(localStorage.getItem("lantern-moth-coins") || "0", 10) || 0; } catch (e) {}
@@ -1129,7 +1130,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     c.clearRect(0, 0, 300, 300);
     withCtx(c, function () {
       ctx.save(); ctx.scale(3, 3); // 100 x 100 units: room for her full glow plus her drifting
-      drawFairy(50 + Math.sin(shopT * 1.6) * 6 + Math.sin(shopT * 37) * 1.2, 50 + Math.sin(shopT * 2.3) * 4 + Math.cos(shopT * 41) * 1.2, shopT, -1);
+      drawFairy(50 + Math.sin(shopT * 0.9) * 5, 50 + Math.sin(shopT * 1.4) * 3.5 + Math.sin(shopT * 0.6) * 1.5, shopT, -1); // a slow drift, no trembling
       ctx.restore();
     });
     shopRaf = requestAnimationFrame(shopTick);
@@ -2092,7 +2093,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   }
   function endEvent(reward) {
     var e = G.ev, bonus;
-    G.ev = null; G.webs = [];
+    G.ev = null; // any of the Weaver's shots still in flight keep going until they leave the screen
     if (e && e.type === "boss") G.spawnH = 1.5;
     if (!reward || !e) return;
     // survival bonus: 10,000 for Itsy-Bitsy, 25,000 for the Weaver, each growing 1.1x for every time that same event has been survived this run
@@ -2124,7 +2125,8 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   function sfxWebShot() { tone(700, 0.12, "triangle", 0.05, 260); }
   function sfxStuck() { tone(240, 0.22, "sawtooth", 0.07, 110); }
   function sfxStruggle() { tone(420 + Math.random() * 120, 0.05, "square", 0.03, 300); }
-  function struggle() { if (G.stuck > 0) G.stuck = Math.max(0, G.stuck - 0.12); }
+  var WEB_HOLD = 3.2, WEB_WRIGGLE = 0.06; // a web holds for 3.2s; each tap or key press shaves off 0.06s
+  function struggle() { if (G.stuck > 0) G.stuck = Math.max(0, G.stuck - WEB_WRIGGLE); }
   // aim partway ahead of the moth: half its current drift over the shot's flight time, capped, so it is not a perfect read
   function aimShot(ox, oy, speed) {
     var px = G.mx, i, dx, dy, T, L;
@@ -2162,35 +2164,50 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       e.lt += dt;
       e.by -= (50 + 420 * e.lt) * dt;
       e.bx += (W / 2 - e.bx) * Math.min(1, dt * 1.5);
-      G.webs = []; // a moth already caught stays caught until she wriggles free
       if (e.by < -110) endEvent(true);
       return;
     }
     var enter = Math.min(1, e.t / 1.6);
     e.bx = W / 2 + Math.sin(e.t * 0.8) * 120 * enter;
     e.by = -70 + (70 + MY - 300 * VS) * (1 - Math.pow(1 - enter, 3)) + Math.sin(e.t * 1.7) * 6 * enter;
-    if (e.t >= e.dur) { e.leave = true; e.lt = 0; G.webs = []; return; }
-    if (enter >= 1 && G.stuck <= 0) {
-      e.fire -= dt;
-      if (e.fire <= 0) {
-        // two or three webs, then one venom glob, then the count starts over
-        var sp = (250 + Math.min(G.level, 100) * 1.6) * VS, glob = e.webLeft <= 0;
-        if (glob) e.webLeft = 2 + Math.floor(rand(0, 2)); else e.webLeft--;
-        a = aimShot(e.bx, e.by + BOSS_MOUTH, glob ? sp * 2 : sp);
-        G.webs.push({ x: e.bx, y: e.by + BOSS_MOUTH, vx: a.vx, vy: a.vy, t: 0, glob: glob, flip: Math.random() < 0.5 ? -1 : 1 });
-        e.fire = 1.0; e.pulse = 1; // 1.5x as often as before
-        if (glob) sfxGlob(); else sfxWebShot();
+    if (e.t >= e.dur) { e.leave = true; e.lt = 0; return; } // shots already in the air finish their flight
+    if (enter >= 1) {
+      var sp = (250 + Math.min(G.level, 100) * 1.6) * VS, glob;
+      if (G.stuck > 0) {
+        // the moth is caught: he waits a second, then spits only venom, more slowly, until she breaks free
+        if (!e.trap) { e.trap = true; e.fire = 1.0; }
+        e.fire -= dt;
+        if (e.fire <= 0) {
+          a = aimShot(e.bx, e.by + BOSS_MOUTH, sp * 2);
+          G.webs.push({ x: e.bx, y: e.by + BOSS_MOUTH, vx: a.vx, vy: a.vy, t: 0, glob: true });
+          e.fire = 1.6; e.pulse = 1;
+          sfxGlob();
+        }
+      } else {
+        if (e.trap) { e.trap = false; e.fire = Math.max(e.fire, 0.8); } // she's free: a short breath, then the usual pattern resumes
+        e.fire -= dt;
+        if (e.fire <= 0) {
+          // two or three webs, then one venom glob, then the count starts over
+          glob = e.webLeft <= 0;
+          if (glob) e.webLeft = 2 + Math.floor(rand(0, 2)); else e.webLeft--;
+          a = aimShot(e.bx, e.by + BOSS_MOUTH, glob ? sp * 2 : sp);
+          G.webs.push({ x: e.bx, y: e.by + BOSS_MOUTH, vx: a.vx, vy: a.vy, t: 0, glob: glob, flip: Math.random() < 0.5 ? -1 : 1 });
+          e.fire = 1.0; e.pulse = 1;
+          if (glob) sfxGlob(); else sfxWebShot();
+        }
       }
-    } else if (G.stuck > 0) {
-      e.fire = 0.9; // a pause once the moth breaks free
     }
+  }
+  // The Weaver's shots fly on their own, so any still in the air when he leaves finish their path.
+  function updateWebs(dt) {
+    var i, w, dx, dy;
     for (i = G.webs.length - 1; i >= 0; i--) {
       w = G.webs[i];
       w.t += dt; w.x += w.vx * dt; w.y += w.vy * dt;
       dx = w.x - G.mx; dy = w.y - MY;
       if (w.glob) {
         // poison glob: half a web's size, twice as fast, burns the glow instead of binding the moth
-        if (G.stuck <= 0 && G.inv <= 0 && dx * dx + dy * dy < 20 * 20) {
+        if (G.inv <= 0 && dx * dx + dy * dy < 20 * 20) { // a caught moth can still be hit
           G.light -= 25;
           G.inv = 1.2;
           G.streak = 0;
@@ -2202,7 +2219,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
           continue;
         }
       } else if (G.stuck <= 0 && webHit(w)) {
-        G.stuck = 1.6;
+        G.stuck = WEB_HOLD;
         G.webs = G.webs.filter(function (q) { return q.glob; });
         burst(G.mx, MY, "#eef0ff", 16);
         sfxStuck();
@@ -2330,6 +2347,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       }
     }
     if (G.ev) updateEvent(dt);
+    if (G.webs.length) updateWebs(dt);
     bossMusic(!!(G.ev && G.ev.type === "boss"), G.ev ? G.ev.dur - G.ev.t : 0);
 
     var i, j, o, b, dx, dy;
@@ -2407,7 +2425,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
         // the higher a bat spawns, the harder it shoves: the lowest keep the base 90, the highest reach 150
         G.haz.push({ type: "bat", x: fromLeft ? -20 : W + 20, y: by0, vx: (fromLeft ? 1 : -1) * rand(110, 170) * d2, r: 13, ph: rand(0, 6), push: 90 + 60 * (MY - 80 - by0) / (MY - 200) });
       }
-      G.spawnH = rand(0.9, 1.6) / hazRate(G.level) / (G.sd ? 1.8 : 1) / (itsy ? 1.375 : 1) / (slimy ? 1.3 : 1);
+      G.spawnH = rand(0.9, 1.6) / hazRate(G.level) / (G.sd ? 1.8 : 1) * (itsy ? 1.6 : 1) / (slimy ? 1.3 : 1); // Itsy-Bitsy: spiders only, at 1.25x the usual spider rate (normally half of hazards)
     }
 
     for (i = G.items.length - 1; i >= 0; i--) {

@@ -2,6 +2,15 @@
 
 Each update raises the version by 0.01. The live game is always `index.html`; every version is its own commit titled "Lantern Moth v2.xx" and automatically gets a tagged Release with a downloadable `LanternMoth-v2.xx.html`.
 
+## v2.42 — 2026-10-19
+- **Itsy-Bitsy** now sends spiders at 1.25× the normal spider rate (it was about 2.75×).
+- **The Weaver:**
+  - Shots already in the air keep flying after he leaves instead of vanishing.
+  - Webs now hold you twice as long (3.2 s), and each wriggle frees you half as much.
+  - While you're caught, he pauses for 1 second, then spits only venom, more slowly (every 1.6 s), and venom can hit a caught moth.
+  - Once you break free, he takes a short breath and returns to his usual web-and-venom pattern.
+- **Lumi's stall:** Lumi now floats slowly instead of trembling.
+
 ## v2.41 — 2026-10-19
 - **Online leaderboard.** The Leaderboard now has three tabs: **All-time** and **This week** (top 50 worldwide, resets Mondays UTC) and **My runs** (your local top 10).
 - Your own entries are highlighted, and your rank is shown even if you're outside the top 50.
