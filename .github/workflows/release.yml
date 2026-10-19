@@ -1,0 +1,40 @@
+# Creates a tagged GitHub Release for every new game version.
+# On each push to main it reads VERSION from index.html. If no tag exists for that version yet, it creates tag v<version>
+# and a Release with that version's CHANGELOG notes and a downloadable LanternMoth-v<version>.html.
+# It runs on GitHub's side with the repository's own token, so it works no matter who or what pushed the update.
+name: Release new version
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read the game version
+        id: ver
+        run: |
+          V=$(grep -oE 'var VERSION = "[0-9]+\.[0-9]+"' index.html | grep -oE '[0-9]+\.[0-9]+')
+          if [ -z "$V" ]; then echo "No VERSION found in index.html" >&2; exit 1; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Create the tag and release
+        if: steps.ver.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.ver.outputs.version }}
+        run: |
+          awk -v h="## v$V" 'index($0, h) == 1 { f = 1; next } /^## / { if (f) exit } f' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "See CHANGELOG.md" > notes.md; fi
+          cp index.html "LanternMoth-v$V.html"
+          gh release create "v$V" "LanternMoth-v$V.html" --target "$GITHUB_SHA" --title "Lantern Moth v$V" --notes-file notes.md

@@ -15,4 +15,5 @@ A night-sky arcade game. Fly into lanterns to keep your glow alive, dodge spider
 ## Versions
 - `index.html` is always the latest game.
 - Each update raises the version by 0.01 and gets an entry in [CHANGELOG.md](CHANGELOG.md).
-- Each version is its own commit titled "Lantern Moth v2.xx", so any older build can be found and restored from the repository's commit history.
+- Each version is its own commit titled "Lantern Moth v2.xx".
+- Every new version automatically gets a tag (`v2.xx`) and a **Release** with its changelog notes and a downloadable `LanternMoth-v2.xx.html`. See the Releases list on the repository page.
