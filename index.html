@@ -1,6 +1,7 @@
 <!doctype html>
 <!--
-  Lantern Moth v2.44
+  Lantern Moth v2.45
+  v2.45: spiders and bats spawn independently (max 3 bats at once); smooth Lumi wings at any refresh rate; slower wand sparkle.
   v2.44: one leaderboard entry per player; 4-character names; Reset all data in Options; Weaver at streak 20, webs hold 2.5s.
   v2.43: calmer Lumi (wand sparkle and wings); Itsy-Bitsy at streak 10 with 2x spiders; Weaver webs 3s, venom after 1.5s; cheaper shop.
   v2.42: calmer Itsy-Bitsy spawns; Weaver shots outlive him; web traps (longer, harder to escape) bring venom-only fire; gentler Lumi in the shop.
@@ -337,7 +338,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       <div class="meter" id="meter" role="meter" aria-label="Glow" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="meterfill"></i></div>
     </div>
     <div class="card" id="card">
-      <p class="eyebrow">Lantern Moth <span class="ver">- v2.44</span></p>
+      <p class="eyebrow">Lantern Moth <span class="ver">- v2.45</span></p>
       <h2 id="ctitle">Keep the glow alive</h2>
       <p id="cbody">Fly into lanterns to refill your light and dodge the spiders. Catch enough lanterns to level up. Every tenth level earns a rebirth, a second chance when your glow goes out.</p>
       <p class="keys" id="ckeys">Arrow keys or A / D to steer. On a touch screen, drag. P or Esc pauses. New here? Try the tutorial.</p>
@@ -490,7 +491,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // shining coins: a rare drop from level 10, kept across runs for a future shop
-  var VERSION = "2.44";
+  var VERSION = "2.45";
   Array.prototype.forEach.call(document.querySelectorAll(".ver"), function (el) { el.textContent = "- v" + VERSION; });
   var coins = 0;
   try { coins = parseInt(localStorage.getItem("lantern-moth-coins") || "0", 10) || 0; } catch (e) {}
@@ -1015,7 +1016,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
 
   function reset() {
     G = { t: 0, score: 0, streak: 0, light: 100, mx: W / 2, tx: W / 2, inv: 0, shake: 0, level: 1, got: 0, banner: 0, lives: 0, flash: 0, bt: "", bs: "", rb: null, gather: [],
-      items: [], haz: [], parts: [], strands: [], spawnL: 0.4, spawnH: 2.2,
+      items: [], haz: [], parts: [], strands: [], spawnL: 0.4, spawnH: 2.2, spawnB: 3.5,
       scroll: G ? G.scroll : 0, sd: null, hb: 0, redAt: 3 + Math.floor(rand(0, 2)), neg: false, touched: false,
       shout: null, fl: null, msDone: 0, ev: null, stuck: 0, struggleT: 0, itsyLatch: false, bossLatch: false, slimeLatch: false, bigPick: "", webs: [], pops: [], bonusIn: 12 + Math.floor(rand(0, 11)), coinIn: 25 + Math.floor(rand(0, 21)), coinsRun: 0, lt: 0, itsyNext: 0, rate: 0, pscore: 0, mvx: 0, pstreak: 0, bossNext: 0, slimeNext: 0, bgs: [], evRest: 0, wins: { itsy: 0, boss: 0, slime: 0 }, runT: 0, tut: false };
   }
@@ -1135,9 +1136,12 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     else { shop.lure++; lumiSay("A Lure for your next flight. Lanterns will find you more kindly."); }
     saveShop(); sfxCoin(); renderShop();
   }
-  function shopTick() {
+  var shopLast = 0;
+  function shopTick(now) {
     if (!shopOpen) return;
-    shopT += 0.016;
+    // advance by real elapsed time, so she animates at the same speed on 60Hz and 120Hz screens
+    shopT += shopLast && now ? Math.min(0.05, (now - shopLast) / 1000) : 0.016;
+    shopLast = now || 0;
     var c = elShopLumi.getContext("2d");
     c.clearRect(0, 0, 300, 300);
     withCtx(c, function () {
@@ -1154,6 +1158,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     renderShop();
     lumiSay("Welcome, little moth! Coins that glitter in the dark buy things that glow. Take a look.");
     cancelAnimationFrame(shopRaf);
+    shopLast = 0;
     shopRaf = requestAnimationFrame(shopTick);
     elShopBack.focus({ preventScroll: true }); elShop.scrollTop = 0;
   }
@@ -1773,7 +1778,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   }
 
   function drawFairy(x, y, t, face) {
-    var flap = 0.45 + 0.55 * Math.abs(Math.sin(t * 30)), s; // wing beat (was 42: slowed so it reads as a flutter, not a jitter)
+    var flap = 0.45 + 0.55 * (0.5 + 0.5 * Math.cos(t * 36)), s; // a smooth wing beat, about 6 per second (the old one snapped shut each beat)
     var g = ctx.createRadialGradient(x, y, 2, x, y, 38);
     g.addColorStop(0, "rgba(255,244,214,0.6)");
     g.addColorStop(1, "rgba(255,200,97,0)");
@@ -1800,7 +1805,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     ctx.strokeStyle = "#fff2cf";
     ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.moveTo(4, 3); ctx.lineTo(13, -6); ctx.stroke();
-    ctx.fillStyle = "rgba(255,246,200," + (0.6 + 0.4 * Math.sin(t * 6)) + ")"; // wand sparkle pulses half as often as before
+    ctx.fillStyle = "rgba(255,246,200," + (0.6 + 0.4 * Math.sin(t * 3)) + ")"; // wand sparkle: one slow pulse about every 2 seconds
     ctx.beginPath();
     ctx.moveTo(13, -13); ctx.lineTo(14.2, -9.2); ctx.lineTo(18, -8); ctx.lineTo(14.2, -6.8);
     ctx.lineTo(13, -3); ctx.lineTo(11.8, -6.8); ctx.lineTo(8, -8); ctx.lineTo(11.8, -9.2);
@@ -2037,6 +2042,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     G.inv = 2.5;
     G.spawnL = 0.6;
     G.spawnH = 2.8;
+    G.spawnB = 3.5;
     G.banner = 1.8;
     G.bt = "NEGATIVE MOTH";
     G.bs = "Dark lanterns feed you. Empty ones drain you.";
@@ -2048,6 +2054,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   // Red lantern: a sudden death stretch with x10 lantern points. A hit during it kills you and also costs one rebirth,
   // (from level 50 on) so surviving a hit takes two rebirths (one lost as the penalty, one spent to come back).
   var SD_LEN = 10;
+  var MAX_BATS = 3;
   function startSuddenDeath() {
     G.sd = { t: 0, dur: SD_LEN };
     G.hb = 0;
@@ -2457,22 +2464,35 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       G.items.push(it);
       G.spawnL = rand(0.8, 1.4) / Math.sqrt(d);
     }
-    if (G.spawnH > 5 && !G.tut && !(G.ev && G.ev.type === "boss")) G.spawnH = 1.5; // the Weaver holds spawns back; however he leaves, the sky refills
+    if (G.spawnH > 50 && !G.tut && !(G.ev && G.ev.type === "boss")) G.spawnH = 1.5; // the Weaver holds spawns back; however he leaves, the sky refills
+    // Spiders (or slimes in Slime Rain) and bats run on separate timers, so bats never crowd spiders out.
+    // Average rates match the old shared pool: one spider and one bat each per two "hazard beats".
+    var itsy = G.ev && G.ev.type === "itsy" && G.ev.hand === undefined;
+    var slimy = G.ev && G.ev.type === "slime";
+    var beat = function () { return rand(0.9, 1.6) / hazRate(G.level) / (G.sd ? 1.8 : 1); };
     G.spawnH -= dt;
     if (G.spawnH <= 0) {
-      var itsy = G.ev && G.ev.type === "itsy" && G.ev.hand === undefined;
-      var slimy = G.ev && G.ev.type === "slime";
-      if (slimy && Math.random() < 0.75) {
+      if (slimy) {
         G.haz.push(makeSlime(rand(30, W - 30), -14, rand(120, 175) * d2));
-      } else if (!slimy && (itsy || Math.random() < 0.5)) {
-        G.haz.push({ type: "spider", x: rand(30, W - 30), y: -10, vy: rand(120, 175) * d2 * (itsy ? 1.25 : 1) /* Itsy-Bitsy spiders fall at 1.25x normal speed */, r: itsy ? 7.5 : 13, s: itsy ? 0.55 : 1, ph: rand(0, 6), snap: rand(MY - 120, MY + 20), cut: false });
       } else {
+        G.haz.push({ type: "spider", x: rand(30, W - 30), y: -10, vy: rand(120, 175) * d2 * (itsy ? 1.25 : 1) /* Itsy-Bitsy spiders fall at 1.25x normal speed */, r: itsy ? 7.5 : 13, s: itsy ? 0.55 : 1, ph: rand(0, 6), snap: rand(MY - 120, MY + 20), cut: false });
+      }
+      G.spawnH = 2 * beat() / (itsy || slimy ? 2 : 1); // Itsy-Bitsy and Slime Rain: twice the usual spider rate
+    }
+    // bats: an extra hazard, never more than 3 crossing at once; none during the tutorial, Itsy-Bitsy or the Weaver
+    var batsOk = !G.tut && G.spawnH < 50 && !(G.ev && (G.ev.type === "itsy" || G.ev.type === "boss"));
+    if (batsOk) G.spawnB -= dt;
+    if (batsOk && G.spawnB <= 0) {
+      var bats = 0;
+      for (i = 0; i < G.haz.length; i++) if (G.haz[i].type === "bat") bats++;
+      if (bats >= MAX_BATS) G.spawnB = 0.5; // full: look again shortly
+      else {
         var fromLeft = Math.random() < 0.5;
         var by0 = rand(120, MY - 80);
         // the higher a bat spawns, the harder it shoves: the lowest keep the base 90, the highest reach 150
         G.haz.push({ type: "bat", x: fromLeft ? -20 : W + 20, y: by0, vx: (fromLeft ? 1 : -1) * rand(110, 170) * d2, r: 13, ph: rand(0, 6), push: 90 + 60 * (MY - 80 - by0) / (MY - 200) });
+        G.spawnB = 2 * beat();
       }
-      G.spawnH = rand(0.9, 1.6) / hazRate(G.level) / (G.sd ? 1.8 : 1) / (slimy ? 1.3 : 1); // Itsy-Bitsy keeps the usual pace but every hazard is a spider: 2x the usual spider rate (normally half are spiders)
     }
 
     for (i = G.items.length - 1; i >= 0; i--) {

@@ -2,6 +2,17 @@
 
 Each update raises the version by 0.01. The live game is always `index.html`; every version is its own commit titled "Lantern Moth v2.xx" and automatically gets a tagged Release with a downloadable `LanternMoth-v2.xx.html`.
 
+## v2.45 — 2026-10-20
+- **Spawning:**
+  - Spiders and bats now spawn on separate timers, so bats never take a spider's place. Average rates are unchanged.
+  - No more than 3 bats cross the screen at once.
+  - Itsy-Bitsy (spiders only) and Slime Rain still bring twice the usual spider or slime rate. Bats stay away during Itsy-Bitsy and the Weaver, as before.
+- **Lumi:**
+  - Her wings now beat smoothly.
+  - Her shop animation now runs on real time, so it no longer speeds up and stutters on 120 Hz screens.
+  - Her wand sparkle pulses half as often again.
+- **README** rewritten for newcomers. Developer notes for the leaderboard moved to `worker/README.md`.
+
 ## v2.44 — 2026-10-19
 - **Leaderboard:** each player now holds a single spot on All-time and This week, with their best run. Lower runs are still saved but don't take extra places. After posting, the game tells you if your earlier best still stands.
 - **Names:** up to 4 characters (was 3), so the default MOTH fits like any other name.
