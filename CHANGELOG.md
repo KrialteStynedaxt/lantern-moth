@@ -2,6 +2,15 @@
 
 Each update raises the version by 0.01. The live game is always `index.html`; every version is its own commit titled "Lantern Moth v2.xx" and automatically gets a tagged Release with a downloadable `LanternMoth-v2.xx.html`.
 
+## v2.47 — 2026-10-21
+- **Bigger text** to suit the new fonts:
+  - Body text, buttons, the HUD, the shop, leaderboard, Options, and Lumi's tutorial lines are about 15% larger.
+  - In-game text (streak, pop-ups, banners, event timers) is larger too.
+  - The "Lantern Moth" title keeps its size so it stays on one line.
+- Leaderboard rows and shop buttons were re-fitted so nothing wraps on small phones.
+- **Venom:** the Weaver's venom now has its own wet "ptuh" spit sound (it used to share a plain beep).
+- **Slime Rain:** half as many distant slimes in the background.
+
 ## v2.46 — 2026-10-21
 - **Font trial:**
   - **Latina Popular** replaces Syne for titles, headings, banners and event timers. Its file is in `fonts/`.
