@@ -1,6 +1,7 @@
 <!doctype html>
 <!--
-  Lantern Moth v2.45
+  Lantern Moth v2.46
+  v2.46: font trial (Latina Popular for titles, Merienda for text); Polaris star on Lumi's wand; smoother Lumi in the tutorial.
   v2.45: spiders and bats spawn independently (max 3 bats at once); smooth Lumi wings at any refresh rate; slower wand sparkle.
   v2.44: one leaderboard entry per player; 4-character names; Reset all data in Options; Weaver at streak 20, webs hold 2.5s.
   v2.43: calmer Lumi (wand sparkle and wings); Itsy-Bitsy at streak 10 with 2x spiders; Weaver webs 3s, venom after 1.5s; cheaper shop.
@@ -28,7 +29,7 @@
 <title>Lantern Moth</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merienda:wght@400;500;700&display=swap">
 <script>
   // If anything fails while loading, say so on screen instead of leaving a page that silently ignores taps.
   (function () {
@@ -43,6 +44,7 @@
   })();
 </script>
 <style>
+@font-face { font-family: "Latina Popular"; src: url("fonts/LatinaPopular-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
 /* Layout: the whole viewport is the stage. A portrait 2:3 play frame is centred in it, sized to fit any screen.
    The HUD bar overlays the top of the frame so lanterns drop out from under it. Everything inside the frame
    scales with the frame's own width (cqw units), so it reads the same on a phone, a tablet or a monitor. */
@@ -54,8 +56,9 @@
   --glow: #ffc861;
   --danger: #ff6179;
   --line: #2a3459;
-  --font-display: "Syne", "Trebuchet MS", sans-serif;
-  --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* font trial: Latina Popular (titles; file in fonts/) and Merienda (all other text, from Google Fonts) */
+  --font-display: "Latina Popular", "Trebuchet MS", sans-serif;
+  --font-mono: "Merienda", "Trebuchet MS", serif;
   color-scheme: dark;
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -191,10 +194,10 @@ button.alt:hover { background: rgba(255,200,97,0.12); filter: none; }
 .card > :first-child { margin-top: auto; }
 .card > :last-child { margin-bottom: auto; }
 /* main menu: the game's name is the big title (with the version beside it), the card's message is the small line under it */
-.card .eyebrow { font-family: var(--font-display); font-weight: 800; font-size: clamp(24px, 9cqw, 44px); line-height: 1.02; letter-spacing: 0.01em; color: var(--glow); max-width: none; text-wrap: balance; }
-.card .eyebrow .ver { font-size: 0.42em; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; vertical-align: 0.35em; }
+.card .eyebrow { font-family: var(--font-display); font-weight: 400; font-size: clamp(24px, 9cqw, 44px); line-height: 1.02; letter-spacing: 0.01em; color: var(--glow); max-width: none; text-wrap: balance; }
+.card .eyebrow .ver { font-size: 0.42em; font-weight: 400; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; vertical-align: 0.35em; }
 #card h2 { font-size: clamp(11px, 3.2cqw, 13px); letter-spacing: 0.22em; text-transform: uppercase; line-height: 1.3; color: var(--ink); }
-.card h2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(24px, 9cqw, 44px); line-height: 1.02; margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
+.card h2 { font-family: var(--font-display); font-weight: 400; font-size: clamp(24px, 9cqw, 44px); line-height: 1.02; margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
 .card p { margin: 0; max-width: 34ch; color: var(--muted); line-height: 1.55; font-size: clamp(12px, 3.5cqw, 14px); }
 .card p.big { color: var(--ink); font-size: clamp(14px, 4cqw, 16px); }
 .keys { font-size: clamp(11px, 3cqw, 12px); color: var(--muted); }
@@ -262,7 +265,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
 .ware .ico { width: clamp(34px, 11cqw, 44px); height: clamp(28px, 9cqw, 36px); display: grid; place-items: center; font-size: clamp(18px, 5.5cqw, 22px); }
 .ware .ico .polaris { width: 88%; height: 88%; }
 .ware > div { min-width: 0; }
-.ware h3 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: clamp(12px, 3.5cqw, 14px); }
+.ware h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: clamp(12px, 3.5cqw, 14px); }
 .ware p, .card .ware p { margin: 2px 0 0; font-size: clamp(11px, 3cqw, 12px); line-height: 1.4; max-width: none; }
 .ware .price { color: #dfe6f0; font-size: clamp(11px, 3cqw, 12px); }
 .ware button { padding: 8px clamp(8px, 2.6cqw, 12px); font-size: clamp(11px, 3cqw, 12px); min-width: 6.5em; }
@@ -338,7 +341,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       <div class="meter" id="meter" role="meter" aria-label="Glow" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="meterfill"></i></div>
     </div>
     <div class="card" id="card">
-      <p class="eyebrow">Lantern Moth <span class="ver">- v2.45</span></p>
+      <p class="eyebrow">Lantern Moth <span class="ver">- v2.46</span></p>
       <h2 id="ctitle">Keep the glow alive</h2>
       <p id="cbody">Fly into lanterns to refill your light and dodge the spiders. Catch enough lanterns to level up. Every tenth level earns a rebirth, a second chance when your glow goes out.</p>
       <p class="keys" id="ckeys">Arrow keys or A / D to steer. On a touch screen, drag. P or Esc pauses. New here? Try the tutorial.</p>
@@ -491,7 +494,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // shining coins: a rare drop from level 10, kept across runs for a future shop
-  var VERSION = "2.45";
+  var VERSION = "2.46";
   Array.prototype.forEach.call(document.querySelectorAll(".ver"), function (el) { el.textContent = "- v" + VERSION; });
   var coins = 0;
   try { coins = parseInt(localStorage.getItem("lantern-moth-coins") || "0", 10) || 0; } catch (e) {}
@@ -1759,9 +1762,9 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     if (F.enter && Math.abs(hx - F.x) < 8) F.enter = false;
     F.face += ((side > 0 ? -1 : 1) - F.face) * Math.min(1, dt * 6);
     F.dart -= dt;
-    if (F.dart <= 0) { F.ox = rand(-22, 22); F.oy = rand(-20, 16); F.dart = rand(0.35, 1.1); }
-    F.bx += (F.ox - F.bx) * Math.min(1, dt * 7);
-    F.by += (F.oy - F.by) * Math.min(1, dt * 7);
+    if (F.dart <= 0) { F.ox = rand(-18, 18); F.oy = rand(-16, 12); F.dart = rand(0.9, 1.8); } // a new drift target every second or two
+    F.bx += (F.ox - F.bx) * Math.min(1, dt * 2.2); // glide there gently instead of snapping
+    F.by += (F.oy - F.by) * Math.min(1, dt * 2.2);
     F.spark -= dt;
     if (F.spark <= 0) {
       F.spark = 0.07;
@@ -1769,11 +1772,11 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       G.parts.push({ x: p.x, y: p.y + 8, vx: rand(-12, 12), vy: rand(4, 26), life: rand(0.5, 0.9), max: 0.9, c: "#fff2cf" });
     }
   }
-  // her drawn position: the hover spot, the current dart, and a fast tiny tremble so she reads as buzzing
+  // her drawn position: the hover spot, the current drift, and a slow gentle bob
   function fairyPos() {
     return {
-      x: F.x + F.bx + Math.sin(F.t * 37) * 1.3,
-      y: F.y + F.by + Math.sin(F.t * 2.3) * 5 + Math.cos(F.t * 41) * 1.3
+      x: F.x + F.bx + Math.sin(F.t * 1.3) * 2,
+      y: F.y + F.by + Math.sin(F.t * 2.1) * 4
     };
   }
 
@@ -1802,14 +1805,26 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     ctx.beginPath(); ctx.moveTo(0, -1); ctx.lineTo(-5.5, 13); ctx.lineTo(5.5, 13); ctx.closePath(); ctx.fill();
     ctx.fillStyle = "#fff2cf";
     ctx.beginPath(); ctx.arc(0, -5, 4.2, 0, 6.283); ctx.fill();
+    // the wand, ending in a little Polaris (the same North Star as the rebirth icon) seated right on its tip
     ctx.strokeStyle = "#fff2cf";
-    ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.moveTo(4, 3); ctx.lineTo(13, -6); ctx.stroke();
-    ctx.fillStyle = "rgba(255,246,200," + (0.6 + 0.4 * Math.sin(t * 3)) + ")"; // wand sparkle: one slow pulse about every 2 seconds
-    ctx.beginPath();
-    ctx.moveTo(13, -13); ctx.lineTo(14.2, -9.2); ctx.lineTo(18, -8); ctx.lineTo(14.2, -6.8);
-    ctx.lineTo(13, -3); ctx.lineTo(11.8, -6.8); ctx.lineTo(8, -8); ctx.lineTo(11.8, -9.2);
-    ctx.closePath(); ctx.fill();
+    ctx.lineWidth = 1.2; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(4, 3); ctx.lineTo(12.6, -5.6); ctx.stroke();
+    ctx.lineCap = "butt";
+    var sx = 14.6, sy = -7.6, pulse = 0.5 + 0.5 * Math.sin(t * 3); // one slow glow pulse about every 2 seconds
+    var sg = ctx.createRadialGradient(sx, sy, 0.5, sx, sy, 8);
+    sg.addColorStop(0, "rgba(255,246,220," + (0.35 + 0.35 * pulse) + ")");
+    sg.addColorStop(1, "rgba(255,246,220,0)");
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sx, sy, 8, 0, 6.283); ctx.fill();
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.fillStyle = "#a9c8ff"; // short pale-blue diagonal rays
+    ctx.beginPath(); ctx.moveTo(-2.3, -2.3); ctx.lineTo(0, -0.5); ctx.lineTo(2.3, -2.3); ctx.lineTo(0.5, 0); ctx.lineTo(2.3, 2.3); ctx.lineTo(0, 0.5);
+    ctx.lineTo(-2.3, 2.3); ctx.lineTo(-0.5, 0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#fff6dc"; // the main star: long up/down points, shorter sideways ones
+    ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(0.8, -0.8); ctx.lineTo(4.2, 0); ctx.lineTo(0.8, 0.8); ctx.lineTo(0, 6);
+    ctx.lineTo(-0.8, 0.8); ctx.lineTo(-4.2, 0); ctx.lineTo(-0.8, -0.8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(0, 0, 0.9, 0, 6.283); ctx.fill();
+    ctx.restore();
     ctx.restore();
   }
 
@@ -2651,9 +2666,9 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       ctx.fillStyle = "#3a2210"; ctx.fillRect(x - 1.5, y + 1, 3, 2.5);
     }
     ctx.textAlign = "center";
-    ctx.font = "500 11px 'DM Mono', monospace"; ctx.fillStyle = "#e9b98c";
+    ctx.font = "500 11px Merienda, serif"; ctx.fillStyle = "#e9b98c";
     ctx.fillText("LUMENS MILESTONE", W / 2, base + 52);
-    ctx.font = "800 30px Syne, sans-serif"; ctx.fillStyle = "#ff9d4d";
+    ctx.font = "400 30px \'Latina Popular\', sans-serif"; ctx.fillStyle = "#ff9d4d";
     ctx.fillText(f.m.toLocaleString("en-US"), W / 2, base + 82);
     ctx.restore();
   }
@@ -3186,7 +3201,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     for (i = 0; i < G.pops.length; i++) {
       o = G.pops[i];
       ctx.globalAlpha = Math.max(0, 1 - o.t / 1.1);
-      ctx.font = "700 13px 'DM Mono', monospace";
+      ctx.font = "700 13px Merienda, serif";
       ctx.textAlign = "center";
       ctx.fillStyle = o.c;
       ctx.fillText(o.text, o.x, o.y - o.t * 30);
@@ -3216,26 +3231,26 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     drawGather();
 
     if (state === "play" && G.streak > 1) {
-      ctx.font = "500 17px 'DM Mono', monospace";
+      ctx.font = "500 17px Merienda, serif";
       ctx.textAlign = "center";
       ctx.fillStyle = "#ffd98a";
       ctx.fillText("Streak x" + G.streak, W / 2, H - 18);
     }
     if (G.neg) {
-      ctx.font = "500 11px 'DM Mono', monospace";
+      ctx.font = "500 11px Merienda, serif";
       ctx.textAlign = "right";
       ctx.fillStyle = "#ffd98a";
       ctx.fillText("NEGATIVE MOTH", W - 12, TOP + 18);
     }
     if (G.sd) {
-      ctx.font = "800 15px Syne, sans-serif";
+      ctx.font = "400 15px \'Latina Popular\', sans-serif";
       ctx.textAlign = "center";
       ctx.fillStyle = "#ff6179";
       ctx.fillText("SUDDEN DEATH  " + Math.ceil(G.sd.dur - G.sd.t), W / 2, TOP + 24);
       ctx.fillRect(60, TOP + 32, (W - 120) * Math.max(0, 1 - G.sd.t / G.sd.dur), 3);
     }
     if (G.ev && !G.ev.leave) {
-      ctx.font = "800 15px Syne, sans-serif";
+      ctx.font = "400 15px \'Latina Popular\', sans-serif";
       ctx.textAlign = "center";
       ctx.fillStyle = G.ev.type === "slime" ? "#8be880" : "#c9a8ff";
       ctx.fillText((G.ev.type === "boss" ? "THE WEAVER  " : (G.ev.type === "slime" ? "SLIME RAIN  " : "ITSY-BITSY SPIDER  ")) + Math.max(0, Math.ceil(G.ev.dur - G.ev.t)), W / 2, TOP + 24);
@@ -3245,12 +3260,12 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       ctx.globalAlpha = Math.min(1, G.banner);
       var bty = 165 - (1.8 - G.banner) * 12, tf = 38, words, line, lines, wi, test;
       ctx.textAlign = "center";
-      ctx.font = "800 " + tf + "px Syne, sans-serif";
-      while (tf > 20 && ctx.measureText(G.bt).width > W - 60) { tf -= 2; ctx.font = "800 " + tf + "px Syne, sans-serif"; }
+      ctx.font = "400 " + tf + "px 'Latina Popular', sans-serif";
+      while (tf > 20 && ctx.measureText(G.bt).width > W - 60) { tf -= 2; ctx.font = "400 " + tf + "px 'Latina Popular', sans-serif"; }
       ctx.fillStyle = "#ffe3a3";
       ctx.fillText(G.bt, W / 2, bty);
       // the subtitle wraps onto extra lines when a narrow window can't hold it
-      ctx.font = "500 13px 'DM Mono', monospace";
+      ctx.font = "500 13px Merienda, serif";
       ctx.fillStyle = "#e9e7f2";
       words = String(G.bs).split(" "); line = ""; lines = [];
       for (wi = 0; wi < words.length; wi++) {
@@ -3268,10 +3283,10 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       ctx.globalAlpha = Math.max(0, Math.min(1, (1.8 - sh.t) / 0.4));
       ctx.translate(W / 2, H * 0.55);
       ctx.scale(pop, pop);
-      ctx.font = "800 30px Syne, sans-serif";
+      ctx.font = "400 30px \'Latina Popular\', sans-serif";
       ctx.textAlign = "center";
       var tw = ctx.measureText(sh.text).width;
-      if (tw > 360) ctx.font = "800 " + Math.floor(30 * 360 / tw) + "px Syne, sans-serif";
+      if (tw > 360) ctx.font = "400 " + Math.floor(30 * 360 / tw) + "px 'Latina Popular', sans-serif";
       ctx.lineJoin = "round";
       ctx.lineWidth = 5;
       // teal in the negative dimension, tuned to survive the filter

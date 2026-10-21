@@ -2,6 +2,14 @@
 
 Each update raises the version by 0.01. The live game is always `index.html`; every version is its own commit titled "Lantern Moth v2.xx" and automatically gets a tagged Release with a downloadable `LanternMoth-v2.xx.html`.
 
+## v2.46 — 2026-10-21
+- **Font trial:**
+  - **Latina Popular** replaces Syne for titles, headings, banners and event timers. Its file is in `fonts/`.
+  - **Merienda** (Google Fonts) replaces DM Mono for all other text.
+- **Lumi:**
+  - Her wand now ends in a small Polaris star seated on its tip, matching the rebirth icon, with a soft glow that pulses slowly.
+  - In the tutorial she drifts to a new spot every second or two and glides there, without the fast trembling.
+
 ## v2.45 — 2026-10-20
 - **Spawning:**
   - Spiders and bats now spawn on separate timers, so bats never take a spider's place. Average rates are unchanged.
