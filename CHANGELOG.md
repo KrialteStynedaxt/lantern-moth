@@ -2,6 +2,18 @@
 
 Each update raises the version by 0.01. The live game is always `index.html`; every version is its own commit titled "Lantern Moth v2.xx" and automatically gets a tagged Release with a downloadable `LanternMoth-v2.xx.html`.
 
+## v2.48 — 2026-10-21
+- **Glow bar** moved from the top bar to the bottom of the screen, centred just under the streak counter.
+- **HUD:**
+  - "LUMENS" now sits on the same line as the score, with Best underneath.
+  - The level progress bar is centred under LEVEL.
+- **Lumi's Lure:** twice the pull strength, over twice the area (it reaches about 1.4× farther sideways and upward).
+- **Shop limits:**
+  - You can hold up to 2 Rebirth Sparks and 1 Lure. The button changes to "Full" until they're spent.
+  - All held Sparks are now spent on the next run, for up to +2 rebirths.
+- **Leaderboard:** the screen is centred, and the title is bigger and never wraps.
+- **Volume:** music now defaults to 100% for new players. Saved settings are kept.
+
 ## v2.47 — 2026-10-21
 - **Bigger text** to suit the new fonts:
   - Body text, buttons, the HUD, the shop, leaderboard, Options, and Lumi's tutorial lines are about 15% larger.

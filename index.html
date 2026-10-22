@@ -1,6 +1,7 @@
 <!doctype html>
 <!--
-  Lantern Moth v2.47
+  Lantern Moth v2.48
+  v2.48: glow bar at the bottom; HUD tidy; stronger Lure; shop limits; centred leaderboard; 100% default volume.
   v2.47: larger text throughout for the new fonts; a spit sound for venom; half as many background slimes.
   v2.46: font trial (Latina Popular for titles, Merienda for text); Polaris star on Lumi's wand; smoother Lumi in the tutorial.
   v2.45: spiders and bats spawn independently (max 3 bats at once); smooth Lumi wings at any refresh rate; slower wand sparkle.
@@ -126,17 +127,18 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; transiti
   pointer-events: none;            /* a drag that starts on the bar still steers the moth */
 }
 .hud button { pointer-events: auto; }
-.hrow { display: flex; align-items: center; gap: 0.9em; min-width: 0; }
+.hrow { display: flex; align-items: center; gap: 0.75em; min-width: 0; }
 .hs { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .lbl { font-size: 0.78em; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 .hs.sc { flex: 1 1 auto; }
-.hs.sc > b { font-weight: 500; font-size: 1.55em; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scline { display: flex; align-items: baseline; gap: 0.4em; min-width: 0; }
+.scline b { font-weight: 500; font-size: 1.55em; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .best { font-size: 0.78em; color: var(--muted); white-space: nowrap; }
 .best span { color: var(--ink); }
-.hs.lv { flex: 0 1 7.6em; }
+.hs.lv { flex: 0 1 5.6em; align-items: center; text-align: center; }
 .hs.lv .lbl b { color: var(--ink); font-weight: 500; font-size: 1.35em; letter-spacing: 0.02em; margin-left: 0.3em; }
-.lprog { display: flex; align-items: center; gap: 0.45em; margin-top: 0.35em; }
-.mini { flex: 1; min-width: 2.5em; height: 0.42em; border-radius: 1em; background: var(--dusk); overflow: hidden; }
+.lprog { display: flex; flex-direction: column; align-items: center; gap: 0.25em; margin-top: 0.35em; width: 100%; }
+.mini { width: 100%; min-width: 2.5em; height: 0.42em; border-radius: 1em; background: var(--dusk); overflow: hidden; }
 .mini i { display: block; height: 100%; width: 100%; background: #fff2cf; transform-origin: left; transform: scaleX(0); transition: transform 0.25s; }
 .lprog small { font-size: 0.85em; white-space: nowrap; }
 .chips { display: flex; flex-direction: column; gap: 0.3em; }
@@ -160,6 +162,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; transiti
 .meter { height: 0.5em; border-radius: 1em; background: var(--dusk); overflow: hidden; }
 .meter i { display: block; height: 100%; width: 100%; background: var(--glow); transform-origin: left; transition: background 0.2s; }
 .meter.low i { background: var(--danger); }
+.glowbar { position: absolute; z-index: 4; left: 50%; transform: translateX(-50%); width: 64%; bottom: clamp(10px, 2.3%, 22px); height: clamp(7px, 2cqw, 10px); pointer-events: none; box-shadow: 0 0 0 1px rgba(42,52,89,0.9), 0 0 12px rgba(255,200,97,0.18); }
 .meter.hl { box-shadow: 0 0 0 2px var(--glow); animation: pulse 1s ease-in-out infinite; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -251,6 +254,8 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
 .tabs .tab { flex: 1; padding: 8px 6px; font-size: clamp(12.5px, 3.56cqw, 14px); background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; }
 .tabs .tab:hover { color: var(--ink); filter: none; }
 .tabs .tab[aria-selected="true"] { color: #1a1405; background: var(--glow); border-color: var(--glow); }
+#board { align-items: center; text-align: center; }
+#board h2 { font-size: clamp(30px, 11.5cqw, 62px); white-space: nowrap; overflow-wrap: normal; }
 #board p#lbStatus { min-height: 1.5em; max-width: 340px; }
 
 .card.shop { gap: 10px; }
@@ -322,7 +327,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     <canvas id="c" width="400" height="600" aria-label="Lantern Moth game field"></canvas>
     <div class="hud" id="hud" aria-live="off">
       <div class="hrow">
-        <div class="hs sc"><span class="lbl">Lumens</span><b id="score">0</b><small class="best">Best <span id="best">0</span></small></div>
+        <div class="hs sc"><div class="scline"><span class="lbl">Lumens</span><b id="score">0</b></div><small class="best">Best <span id="best">0</span></small></div>
         <div class="hs lv">
           <span class="lbl">Level<b id="level">1</b></span>
           <div class="lprog" title="Lanterns caught this level"><div class="mini"><i id="lantfill"></i></div><small id="lant">0/4</small><span class="sr"> lanterns</span></div>
@@ -342,10 +347,10 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
           </button>
         </div>
       </div>
-      <div class="meter" id="meter" role="meter" aria-label="Glow" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="meterfill"></i></div>
     </div>
+    <div class="meter glowbar" id="meter" role="meter" aria-label="Glow" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="meterfill"></i></div>
     <div class="card" id="card">
-      <p class="eyebrow">Lantern Moth <span class="ver">- v2.47</span></p>
+      <p class="eyebrow">Lantern Moth <span class="ver">- v2.48</span></p>
       <h2 id="ctitle">Keep the glow alive</h2>
       <p id="cbody">Fly into lanterns to refill your light and dodge the spiders. Catch enough lanterns to level up. Every tenth level earns a rebirth, a second chance when your glow goes out.</p>
       <p class="keys" id="ckeys">Arrow keys or A / D to steer. On a touch screen, drag. P or Esc pauses. New here? Try the tutorial.</p>
@@ -374,8 +379,8 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
         <input id="volSfx" type="range" min="0" max="100" step="1" value="100">
       </div>
       <div class="slider">
-        <label for="volMus">Music <output id="outMus">80%</output></label>
-        <input id="volMus" type="range" min="0" max="100" step="1" value="80">
+        <label for="volMus">Music <output id="outMus">100%</output></label>
+        <input id="volMus" type="range" min="0" max="100" step="1" value="100">
       </div>
       <p class="keys" id="optHint" hidden>Sound is off. Turn it back on to hear the sliders.</p>
       <button id="optBack" type="button">Back</button>
@@ -498,7 +503,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // shining coins: a rare drop from level 10, kept across runs for a future shop
-  var VERSION = "2.47";
+  var VERSION = "2.48";
   Array.prototype.forEach.call(document.querySelectorAll(".ver"), function (el) { el.textContent = "- v" + VERSION; });
   var coins = 0;
   try { coins = parseInt(localStorage.getItem("lantern-moth-coins") || "0", 10) || 0; } catch (e) {}
@@ -534,7 +539,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   }
   // ---- master mix: every sound passes through here. As the glow drops, volume falls, tone muffles and reverb grows ----
   // player volume settings: effects and music each get their own slider (0 to 1), remembered between visits
-  var vol = { sfx: 1, mus: 0.8 };
+  var vol = { sfx: 1, mus: 1 };
   try {
     var sv = JSON.parse(localStorage.getItem("lantern-moth-vol") || "null");
     if (sv && typeof sv.sfx === "number") vol.sfx = Math.max(0, Math.min(1, sv.sfx));
@@ -1042,13 +1047,15 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     reset();
     G.sparked = false; G.lured = false;
     // buffs bought from Lumi's stall are spent as the run begins
-    if (shop.spark > 0) { shop.spark--; G.sparked = true; G.lives += 1; }
-    if (shop.lure > 0) { shop.lure--; G.lured = true; }
+    var sparks = Math.min(MAX_SPARKS, shop.spark);
+    if (sparks > 0) { shop.spark = 0; G.sparked = sparks; G.lives += sparks; }
+    if (shop.lure > 0) { shop.lure = 0; G.lured = true; }
     if (G.sparked || G.lured) {
       saveShop();
       G.banner = 2.4;
       G.bt = G.sparked && G.lured ? "LUMI'S GIFTS" : (G.sparked ? "REBIRTH SPARK" : "LUMI'S LURE");
-      G.bs = G.sparked && G.lured ? "+1 rebirth, and lanterns drift toward you." : (G.sparked ? "Lumi's gift glows within you. +1 rebirth." : "Lanterns near you will drift your way.");
+      var rb = "+" + G.sparked + " rebirth" + (G.sparked > 1 ? "s" : "");
+      G.bs = G.sparked && G.lured ? rb + ", and lanterns drift toward you." : (G.sparked ? "Lumi's gift glows within you. " + rb + "." : "Lanterns near you will drift your way.");
     }
     cv.style.filter = NEG_OFF;
     negAudio = false;
@@ -1069,11 +1076,11 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
   // ---- Lumi's shop: coins buy a one-run buff, a moth skin and a lasting charm ----
   // the North Star (Polaris): the rebirth mark, shared by the HUD and the shop's Rebirth Spark
   var POLARIS_SVG = '<svg class="polaris" viewBox="-12 -12 24 24" aria-hidden="true"><circle r="7.5" fill="#fff2cf" opacity="0.16"/><path d="M0-6L1.2-1.2 6 0 1.2 1.2 0 6-1.2 1.2-6 0-1.2-1.2Z" transform="rotate(45)" fill="#a9c8ff"/><circle r="4.1" fill="none" stroke="#fff6dc" stroke-width="0.6" opacity="0.7"/><path d="M0-11.8L1.5-1.5 8 0 1.5 1.5 0 11.8-1.5 1.5-8 0-1.5-1.5Z" fill="#fff6dc"/><path d="M0-11.8L1.5-1.5 0 0Z M8 0L1.5 1.5 0 0Z M0 11.8L-1.5 1.5 0 0Z M-8 0L-1.5-1.5 0 0Z" fill="#e9c98a"/><circle r="1.6" fill="#ffffff"/></svg>';
-  var SHOP_KEY = "lantern-moth-shop";
+  var SHOP_KEY = "lantern-moth-shop", MAX_SPARKS = 2; // you can hold at most 2 Rebirth Sparks and 1 Lure; all are spent on the next run
   var shop = { spark: 0, lure: 0, own: {}, wear: "" }, shopOpen = false, shopRaf = 0, shopT = 0;
   try {
     var sv = JSON.parse(localStorage.getItem(SHOP_KEY) || "{}");
-    shop.spark = Math.max(0, sv.spark | 0);
+    shop.spark = Math.min(MAX_SPARKS, Math.max(0, sv.spark | 0));
     shop.own = sv.own && typeof sv.own === "object" ? sv.own : {};
     if (sv.skin) shop.own.moon = true; // older saves only knew about Moonlit Wings
     shop.wear = typeof sv.wear === "string" ? sv.wear : (sv.skinOn ? "moon" : "");
@@ -1085,11 +1092,11 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       saveShop(); // record the migration so the refund only ever happens once
     }
     if (shop.wear && !shop.own[shop.wear]) shop.wear = "";
-    shop.lure = typeof sv.lure === "number" ? Math.max(0, sv.lure | 0) : (sv.lure ? 1 : 0);
+    shop.lure = typeof sv.lure === "number" ? Math.min(1, Math.max(0, sv.lure | 0)) : (sv.lure ? 1 : 0);
   } catch (e) {}
   function saveShop() { try { localStorage.setItem(SHOP_KEY, JSON.stringify(shop)); } catch (e) {} }
   var WARES = [
-    { id: "spark", name: "Rebirth Spark", price: 20, svg: true, desc: "A bottled spark of Lumi's light. Your next run begins with one extra rebirth. Used up when you fly." },
+    { id: "spark", name: "Rebirth Spark", price: 20, svg: true, desc: "A bottled spark of Lumi's light. Your next run begins with one extra rebirth for each you hold (up to 2). Used up when you fly." },
     { id: "lure", name: "Lumi's Lure", price: 10, ico: "\u2740", desc: "A charm for your next run only. Lanterns that drift close to you are gently drawn in. Red lanterns never are." },
     { id: "moon", skin: true, name: "Moonlit Wings", price: 50, desc: "A silver-blue moth skin, spun from moonlight. Wear it or swap back any time.",
       buySay: "Moonlit Wings, yours! Try them in the night sky.", wearSay: "Oh, you look lovely in moonlight!" },
@@ -1116,12 +1123,16 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       mid.appendChild(h); mid.appendChild(p); mid.appendChild(pr);
       btn.type = "button";
       var owned = w.skin ? !!shop.own[w.id] : (w.id === "spark" ? shop.spark : shop.lure);
-      if (!w.skin) pr.textContent = w.price + " coins  \u00b7  you hold " + owned;
+      var cap = w.id === "spark" ? MAX_SPARKS : 1, full = !w.skin && owned >= cap;
+      if (!w.skin) pr.textContent = w.price + " coins  \u00b7  you hold " + owned + "/" + cap;
       else pr.textContent = owned ? "Owned" : w.price + " coins";
       if (w.skin && owned) {
         btn.textContent = shop.wear === w.id ? "Unequip" : "Equip";
         btn.className = "alt";
         if (shop.wear === w.id) row.classList.add("on");
+      } else if (full) {
+        btn.textContent = "Full";
+        btn.disabled = true; // more can be bought once these are spent on a run
       } else {
         btn.textContent = "Buy";
         if (coins < w.price) btn.classList.add("poor");
@@ -1136,6 +1147,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       shop.wear = shop.wear === w.id ? "" : w.id;
       saveShop(); lumiSay(shop.wear ? w.wearSay : "Back to your own Hebrew wings."); renderShop(); return;
     }
+    if (!w.skin && (w.id === "spark" ? shop.spark >= MAX_SPARKS : shop.lure >= 1)) { lumiSay("That's all you can carry. Fly a run and come back for more!"); return; }
     if (coins < w.price) { lumiSay("Hmm, you need " + (w.price - coins) + " more coins for that one."); sfxMiss(); return; }
     coins -= w.price; saveCoins(); elCoins.textContent = coins;
     if (w.id === "spark") { shop.spark++; lumiSay("Keep it safe! It will glow when you need it."); }
@@ -1439,7 +1451,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     G.touched = true;
     G.level = L;
     G.got = 0;
-    G.lives = Math.floor(L / 10) + (G.sparked ? 1 : 0);
+    G.lives = Math.floor(L / 10) + (G.sparked || 0);
     G.redAt = L + 1 + Math.floor(rand(0, 3));
     G.banner = 2.2;
     G.bt = "LEVEL " + L;
@@ -1604,7 +1616,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
     { say: "First, fly side to side. Use the arrow keys or A and D. On a touch screen, drag.",
       enter: function () { T.travel = 0; T.hintMove = true; },
       done: function () { return T.travel > 170; } },
-    { talk: true, hl: true, say: "That bar is your glow. It drains all the time, and if it runs out, your flight is over." },
+    { talk: true, hl: true, say: "The bar at the bottom is your glow. It drains all the time, and if it runs out, your flight is over." },
     { say: "Lanterns refill your light. Fly into the glowing one!",
       enter: function () { T.collected = 0; T.respawn = 0.3; },
       tick: function (dt) {
@@ -2544,8 +2556,8 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
         o.kv *= Math.exp(-3 * dt);
         if (Math.abs(o.kv) < 1) o.kv = 0;
       }
-      if (G.lured && !G.tut && !o.red && !o.fairy && o.lit !== false && o.y > MY - 170 && o.y < MY + 20 && Math.abs(G.mx - o.x) < 75) {
-        o.x += (G.mx - o.x) * Math.min(1, dt * 1.1); // Lumi's Lure (one run): a gentle pull toward the moth
+      if (G.lured && !G.tut && !o.red && !o.fairy && o.lit !== false && o.y > MY - 250 && o.y < MY + 20 && Math.abs(G.mx - o.x) < 106) {
+        o.x += (G.mx - o.x) * Math.min(1, dt * 2.2); // Lumi's Lure (one run): pull twice v2.47's strength over twice its area
       }
       o.x = Math.max(14, Math.min(W - 14, o.x));
       dx = o.x - G.mx; dy = o.y - MY;
@@ -3259,7 +3271,7 @@ input[type="text"]:focus-visible { outline: 2px solid var(--ink); outline-offset
       ctx.font = "500 19px Merienda, serif";
       ctx.textAlign = "center";
       ctx.fillStyle = "#ffd98a";
-      ctx.fillText("Streak x" + G.streak, W / 2, H - 18);
+      ctx.fillText("Streak x" + G.streak, W / 2, H - 42); // sits just above the glow bar
     }
     if (G.neg) {
       ctx.font = "500 13px Merienda, serif";
